@@ -36,7 +36,9 @@ class CelebADataset(Dataset):
 
 
 if __name__ == "__main__":
+
     parser = argparse.ArgumentParser(description="Prepare CelebA dataset.")
+
     parser.add_argument("attribute_path", type=str, help="Path to load attributes csv.")
     parser.add_argument("images_dir", type=str, help="Path to images stored directory.")
 
