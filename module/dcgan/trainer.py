@@ -179,10 +179,10 @@ class Trainer:
             self.generator.state_dict(),
             os.path.join(self.save_dir, "generator_{}.pth.tar".format(epoch)),
         )
-        torch.save(
-            self.discriminator.state_dict(),
-            os.path.join(self.save_dir, "discriminator_{}.pth.tar".format(epoch)),
-        )
+        # torch.save(
+        #     self.discriminator.state_dict(),
+        #     os.path.join(self.save_dir, "discriminator_{}.pth.tar".format(epoch)),
+        # )
 
 
 if __name__ == "__main__":
