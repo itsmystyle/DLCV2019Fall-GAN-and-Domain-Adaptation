@@ -164,6 +164,7 @@ class Trainer:
                     "D_fake": adv_errD_fake.item(),
                     "G": adv_errG.item(),
                 },
+                iters,
             )
             self.writer.add_scalars(
                 "aux_loss",
@@ -172,6 +173,7 @@ class Trainer:
                     "D_fake": aux_errD_fake.item(),
                     "G": aux_errG.item(),
                 },
+                iters,
             )
 
             iters += 1
