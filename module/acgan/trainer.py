@@ -11,6 +11,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
 
+from module.metrics import Accuracy
 from module.acgan.generator import Generator
 from module.acgan.discriminator import Discriminator
 from module.utils import weights_init, set_random_seed
@@ -57,6 +58,9 @@ class Trainer:
         self.fixed_attribute[:32] = 0
         self.real_label = 1
         self.fake_label = 0
+        self.dAcc_fake = Accuracy()
+        self.dAcc_real = Accuracy()
+        self.gAcc = Accuracy()
 
     def fit(self):
         # train model
@@ -83,6 +87,9 @@ class Trainer:
 
         Loss_G = []
         Loss_D = []
+        self.dAcc_fake.reset()
+        self.dAcc_real.reset()
+        self.gAcc.reset()
 
         for idx, (images, labels) in trange:
             bs = images.shape[0]
@@ -98,7 +105,11 @@ class Trainer:
             aux_errD_real = self.criterion(pred_labels.view(-1), labels.float())
             errD_real = adv_errD_real + aux_errD_real
             errD_real.backward()
+
             D_x = output.mean().item()
+            self.dAcc_real.update(
+                pred_labels.view(-1).detach().cpu().numpy(), labels.float().detach().cpu().numpy()
+            )
 
             # Train D with fake image
             noise = torch.randn(bs, self.latent_dim, 1, 1, device=self.device)
@@ -111,6 +122,9 @@ class Trainer:
             errD_fake.backward()
 
             D_G_z1 = output.mean().item()
+            self.dAcc_fake.update(
+                pred_labels.view(-1).detach().cpu().numpy(), labels.float().detach().cpu().numpy()
+            )
 
             errD = errD_real + errD_fake
 
@@ -128,6 +142,9 @@ class Trainer:
             errG.backward()
 
             D_G_z2 = output.mean().item()
+            self.gAcc.update(
+                pred_labels.view(-1).detach().cpu().numpy(), labels.float().detach().cpu().numpy()
+            )
 
             self.OptimG.step()
             ###############################
@@ -140,10 +157,11 @@ class Trainer:
             postfix_dict = {
                 "L_G": "{:.4f}".format(np.array(Loss_G).mean()),
                 "L_D": "{:.4f}".format(np.array(Loss_D).mean()),
-                "cL_G": "{:.4f}".format(errG.item()),
-                "cL_D": "{:.4f}".format(errD.item()),
-                "aux_D": "{:.4f}/{:.4f}".format(aux_errD_real.item(), aux_errD_fake.item()),
-                "aux_G": "{:.4f}".format(aux_errG.item()),
+                "M_G": "{:.4f}".format(self.gAcc.get_score()),
+                "M_Df": "{:.4f}".format(self.dAcc_fake.get_score()),
+                "M_Dr": "{:.4f}".format(self.dAcc_real.get_score()),
+                "Aux_D": "{:.4f}/{:.4f}".format(aux_errD_real.item(), aux_errD_fake.item()),
+                "Aux_G": "{:.4f}".format(aux_errG.item()),
                 "D(x)": "{:.4f}".format(D_x),
                 "D(G(z))": "{:.4f}/{:.4f}".format(D_G_z1, D_G_z2),
             }
@@ -151,27 +169,38 @@ class Trainer:
 
             # writer write loss of g and d per iteration
             self.writer.add_scalars(
-                "avg_loss", {"G": np.array(Loss_G).mean(), "D": np.array(Loss_D).mean()}, iters
+                "avg_loss",
+                {"avgl_G": np.array(Loss_G).mean(), "avgl_D": np.array(Loss_D).mean()},
+                iters,
             )
-            self.writer.add_scalars("loss", {"G": errG.item(), "D": errD.item()}, iters)
+            self.writer.add_scalars("loss", {"l_G": errG.item(), "l_D": errD.item()}, iters)
             self.writer.add_scalars(
                 "distribution", {"D(x)": D_x, "D(G(z))_d": D_G_z1, "D(G(z))_g": D_G_z2}, iters
             )
             self.writer.add_scalars(
                 "adv_loss",
                 {
-                    "D_real": adv_errD_real.item(),
-                    "D_fake": adv_errD_fake.item(),
-                    "G": adv_errG.item(),
+                    "adv_D_real": adv_errD_real.item(),
+                    "adv_D_fake": adv_errD_fake.item(),
+                    "adv_G": adv_errG.item(),
                 },
                 iters,
             )
             self.writer.add_scalars(
                 "aux_loss",
                 {
-                    "D_real": aux_errD_real.item(),
-                    "D_fake": aux_errD_fake.item(),
-                    "G": aux_errG.item(),
+                    "aux_D_real": aux_errD_real.item(),
+                    "aux_D_fake": aux_errD_fake.item(),
+                    "aux_G": aux_errG.item(),
+                },
+                iters,
+            )
+            self.writer.add_scalars(
+                "accuracy",
+                {
+                    "acc_D_fake": self.dAcc_fake.get_score(),
+                    "acc_D_real": self.dAcc_real.get_score(),
+                    "acc_G_fake": self.gAcc.get_score(),
                 },
                 iters,
             )
