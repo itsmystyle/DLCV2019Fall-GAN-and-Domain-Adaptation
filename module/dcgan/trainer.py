@@ -111,6 +111,7 @@ class Trainer:
             ###############################
 
             ###############################
+            # Train G and label generated images as real-label
             self.generator.zero_grad()
             label.fill_(self.real_label)
             output = self.discriminator(fake)
