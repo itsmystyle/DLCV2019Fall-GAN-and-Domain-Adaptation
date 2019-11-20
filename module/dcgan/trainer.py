@@ -19,15 +19,7 @@ from module.dataset.celebA import CelebADataset
 
 class Trainer:
     def __init__(
-        self,
-        epochs,
-        dataset,
-        writer,
-        save_dir,
-        lr=2e-4,
-        beta1=0.5,
-        workers=4,
-        batch_size=128,
+        self, epochs, dataset, writer, save_dir, lr=2e-4, beta1=0.5, workers=4, batch_size=128,
     ):
 
         self.epochs = epochs
@@ -45,12 +37,8 @@ class Trainer:
         print(self.discriminator)
 
         # Optimizer
-        self.OptimG = optim.Adam(
-            self.generator.parameters(), lr=lr, betas=(beta1, 0.999)
-        )
-        self.OptimD = optim.Adam(
-            self.discriminator.parameters(), lr=lr, betas=(beta1, 0.999)
-        )
+        self.OptimG = optim.Adam(self.generator.parameters(), lr=lr, betas=(beta1, 0.999))
+        self.OptimD = optim.Adam(self.discriminator.parameters(), lr=lr, betas=(beta1, 0.999))
 
         # Criterion
         self.criterion = nn.BCELoss()
@@ -88,10 +76,11 @@ class Trainer:
         self.discriminator.train()
 
         trange = tqdm(
-            enumerate(self.dataloader),
-            total=len(self.dataloader),
-            desc="Epoch {}".format(epoch),
+            enumerate(self.dataloader), total=len(self.dataloader), desc="Epoch {}".format(epoch),
         )
+
+        Loss_G = []
+        Loss_D = []
 
         for idx, (images, labels) in trange:
             bs = images.shape[0]
@@ -133,28 +122,36 @@ class Trainer:
             self.OptimG.step()
             ###############################
 
+            # save loss
+            Loss_G.append(errG.item())
+            Loss_D.append(errD.item())
+
             # update tqdm
             postfix_dict = {
-                "errR": "{:.3f}".format(errD_real.item()),
-                "errF": "{:.3f}".format(errD_fake.item()),
-                "mDe": "{:.3f}".format(errD.item()),
-                "mGe": "{:.3f}".format(errG.item()),
-                "odRm": "{:.3f}".format(D_x),
-                "odFm": "{:.3f}".format(D_G_z1),
-                "ogFm": "{:.3f}".format(D_G_z2),
+                "L_G": "{:.4f}".format(np.array(Loss_G).mean()),
+                "L_D": "{:.4f}".format(np.array(Loss_D).mean()),
+                "cL_G": "{:.4f}".format(errG.item()),
+                "cL_D": "{:.4f}".format(errD.item()),
+                "D(x)": "{:.4f}".format(D_x),
+                "D(G(z))": "{:.4f}/{:.4f}".format(D_G_z1, D_G_z2),
             }
             trange.set_postfix(**postfix_dict)
 
-            # writer write loss of g and d
-            self.writer.add_scalar("loss/d_real_loss", errD_real.item(), iters)
-            self.writer.add_scalar("loss/d_fake_loss", errD_fake.item(), iters)
-            self.writer.add_scalar("loss/d_loss", errD.item(), iters)
-            self.writer.add_scalar("loss/g_loss", errG.item(), iters)
-            self.writer.add_scalar("loss/d_fake_mean", D_x, iters)
-            self.writer.add_scalar("loss/d_real_mean", D_G_z1, iters)
-            self.writer.add_scalar("loss/g_mean", D_G_z2, iters)
+            # writer write loss of g and d per iteration
+            self.writer.add_scalars(
+                "avg_loss", {"G": np.array(Loss_G).mean(), "D": np.array(Loss_D).mean()}, iters
+            )
+            self.writer.add_scalars("loss", {"G": errG.item(), "D": errD.item()}, iters)
+            self.writer.add_scalars(
+                "distribution", {"D(x)": D_x, "D(G(z))_d": D_G_z1, "D(G(z))_g": D_G_z2}, iters
+            )
 
             iters += 1
+
+        # writer write loss of g and d per epoch
+        self.writer.add_scalars(
+            "epoch_loss", {"G": np.array(Loss_G).mean(), "D": np.array(Loss_D).mean()}, epoch
+        )
 
         return iters
 
@@ -169,9 +166,7 @@ class Trainer:
         plt.axis("off")
         plt.title("Fixed Noise Images")
         plt.imshow(
-            np.transpose(
-                vutils.make_grid(fake, padding=2, normalize=True).cpu(), (1, 2, 0),
-            ),
+            np.transpose(vutils.make_grid(fake, padding=2, normalize=True).cpu(), (1, 2, 0),),
         )
         dir = os.path.join(self.save_dir, "figures")
         if not os.path.exists(dir):
@@ -206,14 +201,7 @@ if __name__ == "__main__":
     writer = SummaryWriter(os.path.join(args.model_dir, "train_logs"))
 
     trainer = Trainer(
-        args.epochs,
-        dataset,
-        writer,
-        args.model_dir,
-        lr=2e-4,
-        beta1=0.5,
-        workers=4,
-        batch_size=128,
+        args.epochs, dataset, writer, args.model_dir, lr=2e-4, beta1=0.5, workers=4, batch_size=128,
     )
 
     trainer.fit()
