@@ -54,6 +54,7 @@ class Trainer:
         self.save_dir = save_dir
         self.fixed_noise = torch.randn(64, self.latent_dim, 1, 1, device=self.device)
         self.fixed_attribute = torch.ones(64, dtype=torch.long, device=self.device)
+        self.fixed_attribute[:32] = 0
         self.real_label = 1
         self.fake_label = 0
 
