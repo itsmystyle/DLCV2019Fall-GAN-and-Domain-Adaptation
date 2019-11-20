@@ -173,6 +173,7 @@ class Trainer:
         if not os.path.exists(dir):
             os.makedirs(dir)
         plt.savefig(os.path.join(dir, "epoch_{}.png".format(epoch)))
+        plt.close()
 
     def save(self, epoch):
         torch.save(
