@@ -82,7 +82,7 @@ class Trainer:
         Loss_G = []
         Loss_D = []
 
-        for idx, (images, labels) in trange:
+        for idx, (images, _) in trange:
             bs = images.shape[0]
 
             ###############################
