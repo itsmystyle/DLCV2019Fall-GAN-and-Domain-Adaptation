@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import torch.nn.utils as U
 
@@ -52,11 +53,50 @@ class Discriminator(nn.Module):
             U.spectral_norm(nn.Conv2d(self.n_feature_maps * 8, 1, 4, 1, 0, bias=False)),
             nn.Sigmoid(),
         )
-        self.aux_layer = nn.Sequential(
+        self.bangs_aux_layer = nn.Sequential(
+            U.spectral_norm(nn.Conv2d(self.n_feature_maps * 8, 1, 4, 1, 0, bias=False)),
+            nn.Sigmoid(),
+        )
+        self.biglips_aux_layer = nn.Sequential(
+            U.spectral_norm(nn.Conv2d(self.n_feature_maps * 8, 1, 4, 1, 0, bias=False)),
+            nn.Sigmoid(),
+        )
+        self.hmakeups_aux_layer = nn.Sequential(
+            U.spectral_norm(nn.Conv2d(self.n_feature_maps * 8, 1, 4, 1, 0, bias=False)),
+            nn.Sigmoid(),
+        )
+        self.hcheekbones_aux_layer = nn.Sequential(
+            U.spectral_norm(nn.Conv2d(self.n_feature_maps * 8, 1, 4, 1, 0, bias=False)),
+            nn.Sigmoid(),
+        )
+        self.male_aux_layer = nn.Sequential(
+            U.spectral_norm(nn.Conv2d(self.n_feature_maps * 8, 1, 4, 1, 0, bias=False)),
+            nn.Sigmoid(),
+        )
+        self.wlipstick_aux_layer = nn.Sequential(
+            U.spectral_norm(nn.Conv2d(self.n_feature_maps * 8, 1, 4, 1, 0, bias=False)),
+            nn.Sigmoid(),
+        )
+        self.smile_aux_layer = nn.Sequential(
             U.spectral_norm(nn.Conv2d(self.n_feature_maps * 8, 1, 4, 1, 0, bias=False)),
             nn.Sigmoid(),
         )
 
     def forward(self, X):
         X = self.conv_blocks(X)
-        return self.adv_layer(X), self.aux_layer(X)
+        auxs = torch.cat(
+            (
+                self.bangs_aux_layer(X),
+                self.biglips_aux_layer(X),
+                self.hmakeups_aux_layer(X),
+                self.hcheekbones_aux_layer(X),
+                self.male_aux_layer(X),
+                self.wlipstick_aux_layer(X),
+            ),
+            dim=1,
+        ).squeeze()
+        return (
+            self.adv_layer(X),
+            auxs,
+            self.smile_aux_layer(X),
+        )
