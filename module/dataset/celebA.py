@@ -16,7 +16,19 @@ class CelebADataset(Dataset):
     def __init__(self, attribute_path, images_dir, transform=None):
         self.images_dir = images_dir
         self.data = pd.read_csv(attribute_path)
-        self.data = self.data[["image_name", "Smiling"]]
+        self.data = self.data[
+            [
+                "image_name",
+                "Bangs",
+                "Big_Lips",
+                "Heavy_Makeup",
+                "High_Cheekbones",
+                "Male",
+                "Wearing_Lipstick",
+                "Smiling",
+            ]
+        ]
+
         if transform:
             self.transform = transform
         else:
@@ -29,7 +41,7 @@ class CelebADataset(Dataset):
         image_path = os.path.join(self.images_dir, self.data.iloc[index].image_name)
         image = Image.open(image_path)
         image = self.transform(image)
-        label = self.data.iloc[index].Smiling
+        label = self.data.iloc[index][1:]
         label = torch.tensor(label).long()
 
         return (image, label)
