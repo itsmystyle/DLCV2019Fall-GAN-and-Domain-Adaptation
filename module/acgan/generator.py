@@ -4,7 +4,7 @@ import torch.nn.utils as U
 
 
 class Generator(nn.Module):
-    def __init__(self, latent_dim=100, n_feature_maps=128, n_class=2, embedding_dim=4):
+    def __init__(self, latent_dim=100, n_feature_maps=64, n_class=2, embedding_dim=8):
         super(Generator, self).__init__()
 
         self.latent_dim = latent_dim

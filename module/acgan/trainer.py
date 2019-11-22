@@ -123,7 +123,9 @@ class Trainer:
             label = torch.full((bs,), self.real_label, device=self.device)
             output, aux_labels, smile_labels = self.discriminator(real_image)
             adv_errD_real = self.criterion(output.view(-1), label)
-            aux_errD_real = self.criterion(aux_labels.view(-1), t_aux_labels)
+            aux_errD_real = self.criterion(
+                aux_labels.contiguous().view(-1), t_aux_labels
+            )
             aux_smile_errD_real = self.criterion(smile_labels.view(-1), t_smile_labels)
             errD_real = adv_errD_real + aux_errD_real + aux_smile_errD_real
             errD_real.backward()
@@ -171,7 +173,7 @@ class Trainer:
             label.fill_(self.real_label)
             output, aux_labels, smile_labels = self.discriminator(fake)
             adv_errG = self.criterion(output.view(-1), label)
-            aux_errG = self.criterion(aux_labels.view(-1), t_aux_labels)
+            aux_errG = self.criterion(aux_labels.contiguous().view(-1), t_aux_labels)
             aux_smile_errG = self.criterion(smile_labels.view(-1), t_smile_labels)
             errG = adv_errG + aux_errG + aux_smile_errG
             errG.backward()
