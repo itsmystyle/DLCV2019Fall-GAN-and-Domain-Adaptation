@@ -36,12 +36,17 @@ class Trainer:
         self.latent_dim = 100
         self.embedding_dim = 4
         self.n_feature_maps = 64
+        self.n_attributes = dataset.n_attributes
 
         # Models
         self.generator = Generator(
-            n_feature_maps=self.n_feature_maps, embedding_dim=self.embedding_dim
+            n_feature_maps=self.n_feature_maps,
+            embedding_dim=self.embedding_dim,
+            n_attributes=self.n_attributes,
         )
-        self.discriminator = Discriminator(n_feature_maps=self.n_feature_maps)
+        self.discriminator = Discriminator(
+            n_feature_maps=self.n_feature_maps, n_attributes=self.n_attributes
+        )
         self.generator.to(self.device)
         self.discriminator.to(self.device)
         self.generator.apply(weights_init)
@@ -72,10 +77,19 @@ class Trainer:
         self.fixed_noise = torch.randn(64, self.latent_dim, 1, 1, device=self.device)
         self.fixed_noise[32:] = self.fixed_noise[:32]
         self.fixed_attribute = torch.randint(
-            low=0, high=2, size=(64, 7), dtype=torch.long, device=self.device
+            low=0,
+            high=2,
+            size=(64, self.n_attributes),
+            dtype=torch.long,
+            device=self.device,
         )
-        self.fixed_attribute[:32, -1] = 0
-        self.fixed_attribute[32:, -1] = 1
+        self.fixed_attribute[0, -1] = 0
+        for i in range(1, 64):
+            if i % 2 != 0:
+                self.fixed_attribute[i] = self.fixed_attribute[i - 1]
+                self.fixed_attribute[i, -1] = 1
+            else:
+                self.fixed_attribute[i, -1] = 0
         self.real_label = 1
         self.fake_label = 0
         self.dAcc_fake = Accuracy()
@@ -306,13 +320,21 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=5, help="Training epochs.")
     parser.add_argument("model_dir", type=str, help="Directory path to store models.")
     parser.add_argument("attribute_path", type=str, help="Path to load attributes csv.")
+    parser.add_argument(
+        "--attributes", nargs="+", default=None, help="Attributes use as condition."
+    )
     parser.add_argument("images_dir", type=str, help="Path to images stored directory.")
     parser.add_argument("--random_seed", type=int, default=42, help="random seed.")
 
     args = parser.parse_args()
 
     set_random_seed(args.random_seed)
-    dataset = CelebADataset(args.attribute_path, args.images_dir)
+    if args.attributes is not None:
+        dataset = CelebADataset(
+            args.attribute_path, args.images_dir, attributes=args.attributes
+        )
+    else:
+        dataset = CelebADataset(args.attribute_path, args.images_dir)
     writer = SummaryWriter(os.path.join(args.model_dir, "train_logs"))
 
     trainer = Trainer(
@@ -322,7 +344,7 @@ if __name__ == "__main__":
         args.model_dir,
         lr=2e-4,
         beta1=0.5,
-        workers=4,
+        workers=8,
         batch_size=128,
     )
 
