@@ -3,10 +3,11 @@ import torch.nn.utils as U
 
 
 class Discriminator(nn.Module):
-    def __init__(self, n_feature_maps=128, n_class=1, p=0.25):
+    def __init__(self, n_feature_maps=128, n_class=1, n_attributes=7, p=0.25):
         super(Discriminator, self).__init__()
 
         self.n_feature_maps = n_feature_maps
+        self.n_attributes = n_attributes
         self.n_class = n_class
         self.p = p
         self.conv_blocks = nn.Sequential(
@@ -46,7 +47,11 @@ class Discriminator(nn.Module):
             nn.BatchNorm2d(self.n_feature_maps * 8),
             nn.LeakyReLU(0.2, inplace=True),
             # nn.Dropout2d(self.p),
-            U.spectral_norm(nn.Conv2d(self.n_feature_maps * 8, 8, 4, 1, 0, bias=False)),
+            U.spectral_norm(
+                nn.Conv2d(
+                    self.n_feature_maps * 8, self.n_attributes + 1, 4, 1, 0, bias=False
+                )
+            ),
             nn.Sigmoid(),
         )
 
