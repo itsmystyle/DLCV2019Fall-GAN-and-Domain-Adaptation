@@ -26,7 +26,6 @@ class Generator(nn.Module):
         self.embeds = nn.ModuleList(self.embeds)
 
         self.conv_blocks = nn.Sequential(
-            nn.BatchNorm2d((self.latent_dim + self.n_attributes * self.embedding_dim)),
             U.spectral_norm(
                 nn.ConvTranspose2d(
                     (self.latent_dim + self.n_attributes * self.embedding_dim),
