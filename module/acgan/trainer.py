@@ -27,17 +27,20 @@ class Trainer:
         save_dir,
         lr=2e-4,
         beta1=0.5,
-        workers=4,
+        workers=8,
         batch_size=128,
     ):
 
         self.epochs = epochs
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.latent_dim = 100
+        self.embedding_dim = 4
         self.n_feature_maps = 64
 
         # Models
-        self.generator = Generator(n_feature_maps=self.n_feature_maps)
+        self.generator = Generator(
+            n_feature_maps=self.n_feature_maps, embedding_dim=self.embedding_dim
+        )
         self.discriminator = Discriminator(n_feature_maps=self.n_feature_maps)
         self.generator.to(self.device)
         self.discriminator.to(self.device)
@@ -68,10 +71,11 @@ class Trainer:
         self.save_dir = save_dir
         self.fixed_noise = torch.randn(64, self.latent_dim, 1, 1, device=self.device)
         self.fixed_noise[32:] = self.fixed_noise[:32]
-        self.fixed_attribute = torch.ones(64, 7, dtype=torch.long, device=self.device)
-        self.fixed_attribute[:16] = 0
-        self.fixed_attribute[32:48, :-1] = 0
+        self.fixed_attribute = torch.randint(
+            low=0, high=2, size=(64, 7), dtype=torch.long, device=self.device
+        )
         self.fixed_attribute[:32, -1] = 0
+        self.fixed_attribute[32:, -1] = 1
         self.real_label = 1
         self.fake_label = 0
         self.dAcc_fake = Accuracy()
