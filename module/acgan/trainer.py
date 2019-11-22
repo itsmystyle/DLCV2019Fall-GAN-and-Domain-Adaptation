@@ -33,13 +33,14 @@ class Trainer:
 
         self.epochs = epochs
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.latent_dim = 100
-        self.embedding_dim = 2
-        self.n_feature_maps = 64
+        self.latent_dim = 256
+        self.embedding_dim = 8
+        self.n_feature_maps = 128
         self.n_attributes = dataset.n_attributes
 
         # Models
         self.generator = Generator(
+            latent_dim=self.latent_dim,
             n_feature_maps=self.n_feature_maps,
             embedding_dim=self.embedding_dim,
             n_attributes=self.n_attributes,
@@ -130,8 +131,7 @@ class Trainer:
         for idx, (images, labels) in trange:
             bs = images.shape[0]
             labels = labels.to(self.device)
-            t_aux_labels = labels[:, :-1].contiguous().view(-1).float()
-            t_smile_labels = labels[:, -1].float()
+            t_aux_labels = labels.view(-1).float()
 
             ###############################
             # Train D with real image
@@ -139,45 +139,36 @@ class Trainer:
 
             real_image = images.to(self.device)
             label = torch.full((bs,), self.real_label, device=self.device)
-            output, aux_labels, smile_labels = self.discriminator(real_image)
+            output, aux_labels = self.discriminator(real_image)
             adv_errD_real = self.criterion(output.view(-1), label)
             aux_errD_real = self.criterion(
                 aux_labels.contiguous().view(-1), t_aux_labels
             )
-            aux_smile_errD_real = self.criterion(smile_labels.view(-1), t_smile_labels)
-            errD_real = (
-                (adv_errD_real + (aux_errD_real + aux_smile_errD_real) / 2) / 2 / 2
-            )
+            errD_real = adv_errD_real + aux_errD_real
             errD_real.backward()
 
             D_x = output.mean().item()
 
-            pred_labels = torch.cat(
-                (aux_labels, smile_labels.squeeze().unsqueeze(1)), dim=1
-            )
             self.dAcc_real.update(
-                pred_labels.view(-1).detach().cpu().numpy(),
-                labels.view(-1).float().detach().cpu().numpy(),
+                aux_labels.contiguous().view(-1).detach().cpu().numpy(),
+                t_aux_labels.detach().cpu().numpy(),
             )
 
             # Train D with fake image
             noise = torch.randn(bs, self.latent_dim, 1, 1, device=self.device)
             fake = self.generator(noise, labels)
             label.fill_(self.fake_label)
-            output, aux_labels, smile_labels = self.discriminator(fake.detach())
+            output, aux_labels = self.discriminator(fake.detach())
             adv_errD_fake = self.criterion(output.view(-1), label)
 
-            errD_fake = adv_errD_fake / 2
+            errD_fake = adv_errD_fake
             errD_fake.backward()
 
             D_G_z1 = output.mean().item()
 
-            pred_labels = torch.cat(
-                (aux_labels, smile_labels.squeeze().unsqueeze(1)), dim=1
-            )
             self.dAcc_fake.update(
-                pred_labels.view(-1).detach().cpu().numpy(),
-                labels.view(-1).float().detach().cpu().numpy(),
+                aux_labels.contiguous().view(-1).detach().cpu().numpy(),
+                t_aux_labels.detach().cpu().numpy(),
             )
 
             errD = errD_real + errD_fake
@@ -189,21 +180,17 @@ class Trainer:
             # Train G and label generated images as real-label
             self.generator.zero_grad()
             label.fill_(self.real_label)
-            output, aux_labels, smile_labels = self.discriminator(fake)
+            output, aux_labels = self.discriminator(fake)
             adv_errG = self.criterion(output.view(-1), label)
             aux_errG = self.criterion(aux_labels.contiguous().view(-1), t_aux_labels)
-            aux_smile_errG = self.criterion(smile_labels.view(-1), t_smile_labels)
-            errG = (adv_errG + (aux_errG + aux_smile_errG) / 2) / 2
+            errG = adv_errG + aux_errG
             errG.backward()
 
             D_G_z2 = output.mean().item()
 
-            pred_labels = torch.cat(
-                (aux_labels, smile_labels.squeeze().unsqueeze(1)), dim=1
-            )
             self.gAcc.update(
-                pred_labels.view(-1).detach().cpu().numpy(),
-                labels.view(-1).float().detach().cpu().numpy(),
+                aux_labels.contiguous().view(-1).detach().cpu().numpy(),
+                t_aux_labels.detach().cpu().numpy(),
             )
 
             self.OptimG.step()
@@ -224,9 +211,6 @@ class Trainer:
                     self.dAcc_fake.get_score(),
                 ),
                 "Aux_GD": "{:.4f}/{:.4f}".format(aux_errG.item(), aux_errD_real.item()),
-                "SGD": "{:.4f}/{:.4f}".format(
-                    aux_smile_errG.item(), aux_smile_errD_real.item()
-                ),
                 "Dxz": "{:.4f}/{:.4f}/{:.4f}".format(D_x, D_G_z1, D_G_z2),
             }
             trange.set_postfix(**postfix_dict)
@@ -254,11 +238,6 @@ class Trainer:
             )
             self.writer.add_scalars(
                 "aux_loss", {"D": aux_errD_real.item(), "G": aux_errG.item()}, iters,
-            )
-            self.writer.add_scalars(
-                "aux_smile_loss",
-                {"D_real": aux_smile_errD_real.item(), "G": aux_smile_errG.item()},
-                iters,
             )
             self.writer.add_scalars(
                 "accuracy",
