@@ -31,7 +31,7 @@ class CelebADataset(Dataset):
     ):
         self.images_dir = images_dir
         self.data = pd.read_csv(attribute_path)
-        self.attributes_name = attributes
+        self.attributes_name = ["image_name"] + attributes
         self.n_attributes = len(self.attributes_name) - 1
         self.data = self.data[self.attributes_name]
 
@@ -59,10 +59,15 @@ if __name__ == "__main__":
 
     parser.add_argument("attribute_path", type=str, help="Path to load attributes csv.")
     parser.add_argument("images_dir", type=str, help="Path to images stored directory.")
+    parser.add_argument(
+        "--attributes", nargs="+", default=None, help="Attributes use as condition."
+    )
 
     args = parser.parse_args()
 
-    dataset = CelebADataset(args.attribute_path, args.images_dir)
+    dataset = CelebADataset(
+        args.attribute_path, args.images_dir, attributes=args.attributes
+    )
     dataloader = DataLoader(dataset, batch_size=64, shuffle=False)
     images, labels = next(iter(dataloader))
 
