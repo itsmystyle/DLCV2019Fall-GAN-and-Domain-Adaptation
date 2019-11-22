@@ -34,10 +34,11 @@ class Trainer:
         self.epochs = epochs
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.latent_dim = 100
+        self.n_feature_maps = 64
 
         # Models
-        self.generator = Generator()
-        self.discriminator = Discriminator()
+        self.generator = Generator(n_feature_maps=self.n_feature_maps)
+        self.discriminator = Discriminator(n_feature_maps=self.n_feature_maps)
         self.generator.to(self.device)
         self.discriminator.to(self.device)
         self.generator.apply(weights_init)
@@ -116,8 +117,7 @@ class Trainer:
 
             ###############################
             # Train D with real image
-            if idx % 2 == 0:
-                self.discriminator.zero_grad()
+            self.discriminator.zero_grad()
 
             real_image = images.to(self.device)
             label = torch.full((bs,), self.real_label, device=self.device)
@@ -144,10 +144,10 @@ class Trainer:
             label.fill_(self.fake_label)
             output, aux_labels, smile_labels = self.discriminator(fake.detach())
             adv_errD_fake = self.criterion(output.view(-1), label)
-            aux_errD_fake = self.criterion(aux_labels.view(-1), t_aux_labels)
-            aux_smile_errD_fake = self.criterion(smile_labels.view(-1), t_smile_labels)
+            # aux_errD_fake = self.criterion(aux_labels.view(-1), t_aux_labels)
+            # aux_smile_errD_fake = self.criterion(smile_labels.view(-1), t_smile_labels)
 
-            errD_fake = adv_errD_fake + aux_errD_fake + aux_smile_errD_fake
+            errD_fake = adv_errD_fake
             errD_fake.backward()
 
             D_G_z1 = output.mean().item()
@@ -162,8 +162,7 @@ class Trainer:
 
             errD = errD_real + errD_fake
 
-            if (idx + 1) % 2 == 0:
-                self.OptimD.step()
+            self.OptimD.step()
             ###############################
 
             ###############################
@@ -204,13 +203,9 @@ class Trainer:
                     self.dAcc_real.get_score(),
                     self.dAcc_fake.get_score(),
                 ),
-                "GDrf": "{:.4f}/{:.4f}/{:.4f}".format(
-                    aux_errG.item(), aux_errD_real.item(), aux_errD_fake.item()
-                ),
-                "SGDrf": "{:.4f}/{:.4f}/{:.4f}".format(
-                    aux_smile_errG.item(),
-                    aux_smile_errD_real.item(),
-                    aux_smile_errD_fake.item(),
+                "Aux_GD": "{:.4f}/{:.4f}".format(aux_errG.item(), aux_errD_real.item()),
+                "SGD": "{:.4f}/{:.4f}".format(
+                    aux_smile_errG.item(), aux_smile_errD_real.item()
                 ),
                 "Dxz": "{:.4f}/{:.4f}/{:.4f}".format(D_x, D_G_z1, D_G_z2),
             }
@@ -238,21 +233,11 @@ class Trainer:
                 iters,
             )
             self.writer.add_scalars(
-                "aux_loss",
-                {
-                    "D_real": aux_errD_real.item(),
-                    "D_fake": aux_errD_fake.item(),
-                    "G": aux_errG.item(),
-                },
-                iters,
+                "aux_loss", {"D": aux_errD_real.item(), "G": aux_errG.item()}, iters,
             )
             self.writer.add_scalars(
                 "aux_smile_loss",
-                {
-                    "D_real": aux_smile_errD_real.item(),
-                    "D_fake": aux_smile_errD_fake.item(),
-                    "G": aux_smile_errG.item(),
-                },
+                {"D_real": aux_smile_errD_real.item(), "G": aux_smile_errG.item()},
                 iters,
             )
             self.writer.add_scalars(
