@@ -13,21 +13,27 @@ from module.dataset.utils import get_transform
 
 
 class CelebADataset(Dataset):
-    def __init__(self, attribute_path, images_dir, transform=None):
+    def __init__(
+        self,
+        attribute_path,
+        images_dir,
+        transform=None,
+        attributes=[
+            "image_name",
+            "Bangs",
+            "Big_Lips",
+            "Heavy_Makeup",
+            "High_Cheekbones",
+            "Male",
+            "Wearing_Lipstick",
+            "Smiling",
+        ],
+    ):
         self.images_dir = images_dir
         self.data = pd.read_csv(attribute_path)
-        self.data = self.data[
-            [
-                "image_name",
-                "Bangs",
-                "Big_Lips",
-                "Heavy_Makeup",
-                "High_Cheekbones",
-                "Male",
-                "Wearing_Lipstick",
-                "Smiling",
-            ]
-        ]
+        self.attributes_name = attributes
+        self.n_attributes = len(self.attributes_name) - 1
+        self.data = self.data[self.attributes_name]
 
         if transform:
             self.transform = transform
