@@ -19,7 +19,7 @@ class Discriminator(nn.Module):
             ),
             nn.BatchNorm2d(self.n_feature_maps * 2),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Dropout2d(self.p),
+            # nn.Dropout2d(self.p),
             U.spectral_norm(
                 nn.Conv2d(
                     self.n_feature_maps * 2,
@@ -32,7 +32,7 @@ class Discriminator(nn.Module):
             ),
             nn.BatchNorm2d(self.n_feature_maps * 4),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Dropout2d(self.p),
+            # nn.Dropout2d(self.p),
             U.spectral_norm(
                 nn.Conv2d(
                     self.n_feature_maps * 4,
@@ -45,7 +45,7 @@ class Discriminator(nn.Module):
             ),
             nn.BatchNorm2d(self.n_feature_maps * 8),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Dropout2d(self.p),
+            # nn.Dropout2d(self.p),
             U.spectral_norm(nn.Conv2d(self.n_feature_maps * 8, 8, 4, 1, 0, bias=False)),
             nn.Sigmoid(),
         )
