@@ -34,7 +34,7 @@ class Trainer:
         self.epochs = epochs
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.latent_dim = 100
-        self.embedding_dim = 4
+        self.embedding_dim = 2
         self.n_feature_maps = 64
         self.n_attributes = dataset.n_attributes
 
@@ -75,7 +75,6 @@ class Trainer:
         self.writer = writer
         self.save_dir = save_dir
         self.fixed_noise = torch.randn(64, self.latent_dim, 1, 1, device=self.device)
-        self.fixed_noise[32:] = self.fixed_noise[:32]
         self.fixed_attribute = torch.randint(
             low=0,
             high=2,
@@ -88,6 +87,7 @@ class Trainer:
             if i % 2 != 0:
                 self.fixed_attribute[i] = self.fixed_attribute[i - 1]
                 self.fixed_attribute[i, -1] = 1
+                self.fixed_noise[i] = self.fixed_noise[i - 1]
             else:
                 self.fixed_attribute[i, -1] = 0
         self.real_label = 1
@@ -145,7 +145,9 @@ class Trainer:
                 aux_labels.contiguous().view(-1), t_aux_labels
             )
             aux_smile_errD_real = self.criterion(smile_labels.view(-1), t_smile_labels)
-            errD_real = adv_errD_real + aux_errD_real + aux_smile_errD_real
+            errD_real = (
+                (adv_errD_real + (aux_errD_real + aux_smile_errD_real) / 2) / 2 / 2
+            )
             errD_real.backward()
 
             D_x = output.mean().item()
@@ -164,10 +166,8 @@ class Trainer:
             label.fill_(self.fake_label)
             output, aux_labels, smile_labels = self.discriminator(fake.detach())
             adv_errD_fake = self.criterion(output.view(-1), label)
-            # aux_errD_fake = self.criterion(aux_labels.view(-1), t_aux_labels)
-            # aux_smile_errD_fake = self.criterion(smile_labels.view(-1), t_smile_labels)
 
-            errD_fake = adv_errD_fake
+            errD_fake = adv_errD_fake / 2
             errD_fake.backward()
 
             D_G_z1 = output.mean().item()
@@ -193,7 +193,7 @@ class Trainer:
             adv_errG = self.criterion(output.view(-1), label)
             aux_errG = self.criterion(aux_labels.contiguous().view(-1), t_aux_labels)
             aux_smile_errG = self.criterion(smile_labels.view(-1), t_smile_labels)
-            errG = adv_errG + aux_errG + aux_smile_errG
+            errG = (adv_errG + (aux_errG + aux_smile_errG) / 2) / 2
             errG.backward()
 
             D_G_z2 = output.mean().item()
@@ -307,10 +307,6 @@ class Trainer:
             self.generator.state_dict(),
             os.path.join(self.save_dir, "generator_{}.pth.tar".format(epoch)),
         )
-        # torch.save(
-        #     self.discriminator.state_dict(),
-        #     os.path.join(self.save_dir, "discriminator_{}.pth.tar".format(epoch)),
-        # )
 
 
 if __name__ == "__main__":
