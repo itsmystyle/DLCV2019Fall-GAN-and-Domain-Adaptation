@@ -11,7 +11,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
 
-from module.metrics import Accuracy
+from module.metrics import BCAccuracy
 from module.acgan.generator import Generator
 from module.acgan.discriminator import Discriminator
 from module.utils import weights_init, set_random_seed
@@ -33,9 +33,10 @@ class Trainer:
 
         self.epochs = epochs
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.latent_dim = 256
-        self.embedding_dim = 8
-        self.n_feature_maps = 128
+        self.latent_dim = 124
+        self.embedding_dim = 2
+        self.n_feature_maps = 64
+        self.dropout = 0.25
         self.n_attributes = dataset.n_attributes
 
         # Models
@@ -46,7 +47,9 @@ class Trainer:
             n_attributes=self.n_attributes,
         )
         self.discriminator = Discriminator(
-            n_feature_maps=self.n_feature_maps, n_attributes=self.n_attributes
+            n_feature_maps=self.n_feature_maps,
+            n_attributes=self.n_attributes,
+            p=self.dropout,
         )
         self.generator.to(self.device)
         self.discriminator.to(self.device)
@@ -93,9 +96,14 @@ class Trainer:
                 self.fixed_attribute[i, -1] = 0
         self.real_label = 1
         self.fake_label = 0
-        self.dAcc_fake = Accuracy()
-        self.dAcc_real = Accuracy()
-        self.gAcc = Accuracy()
+        # Auxiliary
+        self.dAcc_fake = BCAccuracy()
+        self.dAcc_real = BCAccuracy()
+        self.gAcc = BCAccuracy()
+        # Adversarial
+        self.d_advAcc_fake = BCAccuracy()
+        self.d_advAcc_real = BCAccuracy()
+        self.g_advAcc = BCAccuracy()
 
     def fit(self):
         # train model
@@ -127,6 +135,9 @@ class Trainer:
         self.dAcc_fake.reset()
         self.dAcc_real.reset()
         self.gAcc.reset()
+        self.d_advAcc_fake.reset()
+        self.d_advAcc_real.reset()
+        self.g_advAcc.reset()
 
         for idx, (images, labels) in trange:
             bs = images.shape[0]
@@ -147,7 +158,10 @@ class Trainer:
             errD_real = adv_errD_real + aux_errD_real
             errD_real.backward()
 
-            D_x = output.mean().item()
+            self.d_advAcc_real.update(
+                output.view(-1).detach().cpu().numpy(),
+                label.view(-1).detach().cpu().numpy(),
+            )
 
             self.dAcc_real.update(
                 aux_labels.contiguous().view(-1).detach().cpu().numpy(),
@@ -164,7 +178,10 @@ class Trainer:
             errD_fake = adv_errD_fake
             errD_fake.backward()
 
-            D_G_z1 = output.mean().item()
+            self.d_advAcc_fake.update(
+                output.view(-1).detach().cpu().numpy(),
+                label.view(-1).detach().cpu().numpy(),
+            )
 
             self.dAcc_fake.update(
                 aux_labels.contiguous().view(-1).detach().cpu().numpy(),
@@ -186,7 +203,10 @@ class Trainer:
             errG = adv_errG + aux_errG
             errG.backward()
 
-            D_G_z2 = output.mean().item()
+            self.g_advAcc.update(
+                output.view(-1).detach().cpu().numpy(),
+                label.view(-1).detach().cpu().numpy(),
+            )
 
             self.gAcc.update(
                 aux_labels.contiguous().view(-1).detach().cpu().numpy(),
@@ -205,13 +225,19 @@ class Trainer:
                 "LGD": "{:.4f}/{:.4f}".format(
                     np.array(Loss_G).mean(), np.array(Loss_D).mean()
                 ),
-                "Acc_GDrf": "{:.4f}/{:.4f}/{:.4f}".format(
+                "AccAux_GDrf": "{:.4f}/{:.4f}/{:.4f}".format(
                     self.gAcc.get_score(),
                     self.dAcc_real.get_score(),
                     self.dAcc_fake.get_score(),
                 ),
-                "Aux_GD": "{:.4f}/{:.4f}".format(aux_errG.item(), aux_errD_real.item()),
-                "Dxz": "{:.4f}/{:.4f}/{:.4f}".format(D_x, D_G_z1, D_G_z2),
+                "LAux_GD": "{:.4f}/{:.4f}".format(
+                    aux_errG.item(), aux_errD_real.item()
+                ),
+                "AccAdv_GDrf": "{:.4f}/{:.4f}/{:.4f}".format(
+                    self.g_advAcc.get_score(),
+                    self.d_advAcc_real.get_score(),
+                    self.d_advAcc_fake.get_score(),
+                ),
             }
             trange.set_postfix(**postfix_dict)
 
@@ -222,11 +248,6 @@ class Trainer:
                 iters,
             )
             self.writer.add_scalars("loss", {"G": errG.item(), "D": errD.item()}, iters)
-            self.writer.add_scalars(
-                "distribution",
-                {"D(x)": D_x, "D(G(z))_d": D_G_z1, "D(G(z))_g": D_G_z2},
-                iters,
-            )
             self.writer.add_scalars(
                 "adv_loss",
                 {
@@ -240,11 +261,20 @@ class Trainer:
                 "aux_loss", {"D": aux_errD_real.item(), "G": aux_errG.item()}, iters,
             )
             self.writer.add_scalars(
-                "accuracy",
+                "aux_accuracy",
                 {
                     "D_real": self.dAcc_real.get_score(),
                     "D_fake": self.dAcc_fake.get_score(),
                     "G": self.gAcc.get_score(),
+                },
+                iters,
+            )
+            self.writer.add_scalars(
+                "adv_accuracy",
+                {
+                    "D_real": self.d_advAcc_real.get_score(),
+                    "D_fake": self.d_advAcc_fake.get_score(),
+                    "G": self.g_advAcc.get_score(),
                 },
                 iters,
             )
@@ -298,6 +328,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--attributes", nargs="+", default=None, help="Attributes use as condition."
     )
+    parser.add_argument("--batch_size", type=int, default=128, help="Batch size.")
     parser.add_argument("images_dir", type=str, help="Path to images stored directory.")
     parser.add_argument("--random_seed", type=int, default=42, help="random seed.")
 
@@ -320,7 +351,7 @@ if __name__ == "__main__":
         lr=2e-4,
         beta1=0.5,
         workers=8,
-        batch_size=128,
+        batch_size=args.batch_size,
     )
 
     trainer.fit()
