@@ -36,7 +36,7 @@ class Trainer:
         self.latent_dim = 124
         self.embedding_dim = 2
         self.n_feature_maps = 64
-        self.dropout = 0.25
+        self.dropout = 0.2
         self.n_attributes = dataset.n_attributes
 
         # Models
