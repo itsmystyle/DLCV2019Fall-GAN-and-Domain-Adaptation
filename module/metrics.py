@@ -12,7 +12,10 @@ class Metrics:
         pass
 
 
-class Accuracy(Metrics):
+class BCAccuracy(Metrics):
+    """ Binary Classification Accuracy
+    """
+
     def __init__(self, threshold=0.5):
         self.name = "Acc."
         self.threshold = threshold
