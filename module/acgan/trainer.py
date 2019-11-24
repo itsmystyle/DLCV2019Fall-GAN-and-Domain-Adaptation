@@ -33,9 +33,9 @@ class Trainer:
 
         self.epochs = epochs
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.latent_dim = 124
-        self.embedding_dim = 2
-        self.n_feature_maps = 64
+        self.latent_dim = 120
+        self.embedding_dim = 4
+        self.n_feature_maps = 128
         self.dropout = 0.2
         self.n_attributes = dataset.n_attributes
 
@@ -225,15 +225,13 @@ class Trainer:
                 "LGD": "{:.4f}/{:.4f}".format(
                     np.array(Loss_G).mean(), np.array(Loss_D).mean()
                 ),
-                "AccAux_GDrf": "{:.4f}/{:.4f}/{:.4f}".format(
+                "AuxGRF": "{:.4f}/{:.4f}/{:.4f}".format(
                     self.gAcc.get_score(),
                     self.dAcc_real.get_score(),
                     self.dAcc_fake.get_score(),
                 ),
-                "LAux_GD": "{:.4f}/{:.4f}".format(
-                    aux_errG.item(), aux_errD_real.item()
-                ),
-                "AccAdv_GDrf": "{:.4f}/{:.4f}/{:.4f}".format(
+                "LAuxGD": "{:.4f}/{:.4f}".format(aux_errG.item(), aux_errD_real.item()),
+                "AdvGRF": "{:.4f}/{:.4f}/{:.4f}".format(
                     self.g_advAcc.get_score(),
                     self.d_advAcc_real.get_score(),
                     self.d_advAcc_fake.get_score(),
@@ -302,7 +300,10 @@ class Trainer:
         plt.title("Fixed Noise Images")
         plt.imshow(
             np.transpose(
-                vutils.make_grid(fake, padding=2, normalize=True).cpu(), (1, 2, 0),
+                vutils.make_grid(
+                    fake, padding=2, normalize=True, scale_each=True
+                ).cpu(),
+                (1, 2, 0),
             ),
         )
         dir = os.path.join(self.save_dir, "figures")
