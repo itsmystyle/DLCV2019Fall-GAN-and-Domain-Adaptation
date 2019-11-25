@@ -43,11 +43,14 @@ class DANN(nn.Module):
         )
 
     def forward(self, X, Lambda):
-        X = X.expand(X.data.shape[0], 3, 28, 28)
         features = self.feature_extractor(X)
         features = features.view(-1, 50 * 4 * 4)
-        reverse_features = GradientReversalLayer(features, Lambda)
+
+        # label classification
         label_output = self.label_predictor(features)
+
+        # domain classification
+        reverse_features = GradientReversalLayer(features, Lambda)
         domain_output = self.domain_classifier(reverse_features)
 
         return label_output, domain_output
