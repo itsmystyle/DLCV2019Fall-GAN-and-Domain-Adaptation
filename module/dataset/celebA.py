@@ -14,20 +14,7 @@ from module.dataset.utils import get_transform
 
 class CelebADataset(Dataset):
     def __init__(
-        self,
-        attribute_path,
-        images_dir,
-        transform=None,
-        attributes=[
-            "image_name",
-            "Bangs",
-            "Big_Lips",
-            "Heavy_Makeup",
-            "High_Cheekbones",
-            "Male",
-            "Wearing_Lipstick",
-            "Smiling",
-        ],
+        self, attribute_path, images_dir, transform=None, attributes=["Smiling"],
     ):
         self.images_dir = images_dir
         self.data = pd.read_csv(attribute_path)
