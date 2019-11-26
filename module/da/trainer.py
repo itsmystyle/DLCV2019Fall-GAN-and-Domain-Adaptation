@@ -4,8 +4,6 @@ import argparse
 import torch
 import torch.nn as nn
 import numpy as np
-import matplotlib.pyplot as plt
-import torchvision.utils as vutils
 from tqdm import tqdm
 from torch import optim
 from torch.utils.data import DataLoader
@@ -140,45 +138,19 @@ class Trainer:
             # update tqdm
             postfix_dict = {
                 "Label loss": "{:.5f}".format(np.mean(LabelLoss)),
-                "Domain loss": "{:.5f}".format(np.mean(DomainLoss)),
+                "Domain loss": "{:.5f}".format(
+                    np.mean(DomainLoss) if DomainLoss != [] else 0.0
+                ),
             }
             trange.set_postfix(**postfix_dict)
 
             # writer write loss of g and d per iteration
             self.writer.add_scalars(
-                "avg_loss",
-                {"G": np.array(Loss_G).mean(), "D": np.array(Loss_D).mean()},
-                iters,
-            )
-            self.writer.add_scalars("loss", {"G": errG.item(), "D": errD.item()}, iters)
-            self.writer.add_scalars(
-                "adv_loss",
-                {
-                    "D_real": adv_errD_real.item(),
-                    "D_fake": adv_errD_fake.item(),
-                    "G": adv_errG.item(),
-                },
-                iters,
+                "Label", {"loss": np.array(LabelLoss).mean()}, iters,
             )
             self.writer.add_scalars(
-                "aux_loss", {"D": aux_errD_real.item(), "G": aux_errG.item()}, iters,
-            )
-            self.writer.add_scalars(
-                "aux_accuracy",
-                {
-                    "D_real": self.dAcc_real.get_score(),
-                    "D_fake": self.dAcc_fake.get_score(),
-                    "G": self.gAcc.get_score(),
-                },
-                iters,
-            )
-            self.writer.add_scalars(
-                "adv_accuracy",
-                {
-                    "D_real": self.d_advAcc_real.get_score(),
-                    "D_fake": self.d_advAcc_fake.get_score(),
-                    "G": self.g_advAcc.get_score(),
-                },
+                "Domain",
+                {"loss": np.array(DomainLoss).mean() if DomainLoss != [] else 0.0},
                 iters,
             )
 
@@ -187,37 +159,22 @@ class Trainer:
         # writer write loss of g and d per epoch
         self.writer.add_scalars(
             "epoch_loss",
-            {"G": np.array(Loss_G).mean(), "D": np.array(Loss_D).mean()},
+            {
+                "label": np.array(LabelLoss).mean(),
+                "domain": np.array(DomainLoss).mean() if DomainLoss != [] else 0.0,
+            },
             epoch,
         )
 
         return iters
 
     def _eval_one_epoch(self, epoch):
-        # plot fixed noise figures
-        self.generator.eval()
-
-        with torch.no_grad():
-            fake = self.generator(self.fixed_noise, self.fixed_attribute).detach().cpu()
-
-        plt.figure(figsize=(8, 8))
-        plt.axis("off")
-        plt.title("Fixed Noise Images")
-        plt.imshow(
-            np.transpose(
-                vutils.make_grid(fake, padding=2, normalize=True).cpu(), (1, 2, 0),
-            ),
-        )
-        dir = os.path.join(self.save_dir, "figures")
-        if not os.path.exists(dir):
-            os.makedirs(dir)
-        plt.savefig(os.path.join(dir, "epoch_{}.png".format(epoch)))
-        plt.close()
+        pass
 
     def save(self, epoch):
         torch.save(
-            self.generator.state_dict(),
-            os.path.join(self.save_dir, "generator_{}.pth.tar".format(epoch)),
+            self.model.state_dict(),
+            os.path.join(self.save_dir, "model_{}.pth.tar".format(epoch)),
         )
 
 
@@ -227,32 +184,44 @@ if __name__ == "__main__":
 
     parser.add_argument("--epochs", type=int, default=5, help="Training epochs.")
     parser.add_argument("model_dir", type=str, help="Directory path to store models.")
-    parser.add_argument("attribute_path", type=str, help="Path to load attributes csv.")
+    parser.add_argument("source_datapath", type=str, help="Path to source dataset.")
     parser.add_argument(
-        "--attributes", nargs="+", default=None, help="Attributes use as condition."
+        "source_images_dir", type=str, help="Path to source images directory."
     )
-    parser.add_argument("--batch_size", type=int, default=128, help="Batch size.")
-    parser.add_argument("images_dir", type=str, help="Path to images stored directory.")
+    parser.add_argument("valid_datapath", type=str, help="Path to validation dataset.")
+    parser.add_argument(
+        "valid_images_dir", type=str, help="Path to validation images directory."
+    )
+    parser.add_argument("--target_datapath", type=str, help="Path to target dataset.")
+    parser.add_argument(
+        "--target_images_dir", type=str, help="Path to target images directory."
+    )
+    parser.add_argument("--batch_size", type=int, default=32, help="Batch size.")
     parser.add_argument("--random_seed", type=int, default=42, help="random seed.")
 
     args = parser.parse_args()
 
     set_random_seed(args.random_seed)
-    if args.attributes is not None:
-        dataset = CelebADataset(
-            args.attribute_path, args.images_dir, attributes=args.attributes
-        )
+    source_dataset = DigitDataset(args.source_datapath, args.source_images_dir)
+    validset = DigitDataset(args.valid_datapath, args.valid_images_dir)
+    target_dataset = None
+    if args.target_datapath is not None and args.target_images_dir is not None:
+        target_dataset = DigitDataset(args.target_datapath, args.target_images_dir)
+        train_source_only = False
     else:
-        dataset = CelebADataset(args.attribute_path, args.images_dir)
+        train_source_only = True
+        target_dataset = source_dataset
     writer = SummaryWriter(os.path.join(args.model_dir, "train_logs"))
 
     trainer = Trainer(
         args.epochs,
-        dataset,
+        source_dataset,
+        target_dataset,
+        validset,
+        train_source_only,
         writer,
         args.model_dir,
-        lr=2e-4,
-        beta1=0.5,
+        lr=1e-4,
         workers=8,
         batch_size=args.batch_size,
     )
