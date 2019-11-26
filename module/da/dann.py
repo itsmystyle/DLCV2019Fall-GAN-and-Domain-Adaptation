@@ -36,7 +36,7 @@ class DANN(nn.Module):
 
         self.domain_classifier = nn.Sequential(
             nn.Linear(50 * 4 * 4, 100),
-            nn.BatchNorm2d(100),
+            nn.BatchNorm1d(100),
             nn.ReLU(True),
             nn.Linear(100, 2),
             nn.LogSoftmax(dim=1),
@@ -50,7 +50,7 @@ class DANN(nn.Module):
         label_output = self.label_predictor(features)
 
         # domain classification
-        reverse_features = GradientReversalLayer(features, Lambda)
+        reverse_features = GradientReversalLayer.apply(features, Lambda)
         domain_output = self.domain_classifier(reverse_features)
 
         return label_output, domain_output
