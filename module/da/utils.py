@@ -9,7 +9,7 @@ class GradientReversalLayer(Function):
         return X.view_as(X)
 
     @staticmethod
-    def backward(ctx, grad_output):
-        output = grad_output.neg() * ctx.Lambda
+    def backward(ctx, grad):
+        grad_output = grad.neg() * ctx.Lambda
 
-        return output, None
+        return grad_output, None
