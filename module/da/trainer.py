@@ -12,6 +12,7 @@ from tensorboardX import SummaryWriter
 from module.da.dann import DANN
 from module.utils import weights_init, set_random_seed
 from module.dataset.digit import DigitDataset
+from module.metrics import MulticlassAccuracy
 
 
 class Trainer:
@@ -62,23 +63,23 @@ class Trainer:
         self.save_dir = save_dir
         self.source_label = 0
         self.target_label = 1
+        self.mcAcc = MulticlassAccuracy()
 
     def fit(self):
         # train model
         print("===> start training ...")
         iters = 0
+        val_iters = 0
+        best_acc = 0
 
         for epoch in range(1, self.epochs + 1):
             iters = self._run_one_epoch(epoch, iters)
 
             # generate figures
-            self._eval_one_epoch(epoch)
-
-            # save model
-            self.save(epoch)
+            val_iters, best_acc = self._eval_one_epoch(epoch, val_iters, best_acc)
 
     def _run_one_epoch(self, epoch, iters):
-        # train generator and discriminator one epoch
+        # train model one epoch
         self.model.train()
 
         _len = min(len(self.source_dataloader), len(self.target_dataloader))
@@ -93,6 +94,7 @@ class Trainer:
 
         DomainLoss = []
         LabelLoss = []
+        self.mcAcc.reset()
 
         for idx, (sources, targets) in trange:
 
@@ -117,6 +119,7 @@ class Trainer:
             label_loss = self.criterion(label_pred, labels)
             loss = label_loss
 
+            self.mcAcc.update(label_pred, labels)
             LabelLoss.append(label_loss.item())
 
             if not self.train_source_only:
@@ -141,10 +144,11 @@ class Trainer:
                 "Domain loss": "{:.5f}".format(
                     np.mean(DomainLoss) if DomainLoss != [] else 0.0
                 ),
+                "Label Acc.": "{:.5f}".format(self.mcAcc.get_score()),
             }
             trange.set_postfix(**postfix_dict)
 
-            # writer write loss of g and d per iteration
+            # writer write loss per iteration
             self.writer.add_scalars(
                 "Label", {"loss": np.array(LabelLoss).mean()}, iters,
             )
@@ -153,10 +157,13 @@ class Trainer:
                 {"loss": np.array(DomainLoss).mean() if DomainLoss != [] else 0.0},
                 iters,
             )
+            self.writer.add_scalars(
+                "Accuracy", {"label": self.mcAcc.get_score()}, iters,
+            )
 
             iters += 1
 
-        # writer write loss of g and d per epoch
+        # writer write loss per epoch
         self.writer.add_scalars(
             "epoch_loss",
             {
@@ -168,13 +175,62 @@ class Trainer:
 
         return iters
 
-    def _eval_one_epoch(self, epoch):
-        pass
+    def _eval_one_epoch(self, epoch, val_iters, best_acc):
+        # evaluate model one epoch
+        self.model.eval()
 
-    def save(self, epoch):
+        LabelLoss = []
+        self.mcAcc.reset()
+
+        trange = tqdm(
+            enumerate(self.valid_dataloader),
+            total=len(self.valid_dataloader),
+            desc="Valid",
+        )
+
+        with torch.no_grad():
+            for idx, (images, labels) in trange:
+                images, labels = images.to(self.device), labels.to(self.device)
+
+                preds, _ = self.model(images, 1.0)
+                loss = self.criterion(preds, labels)
+
+                LabelLoss.append(loss.item())
+                self.mcAcc.update(preds, labels)
+
+                # update tqdm
+                postfix_dict = {
+                    "Loss": "{:.5f}".format(np.mean(LabelLoss)),
+                    "Acc.": "{:.5f}".format(self.mcAcc.get_score()),
+                }
+                trange.set_postfix(**postfix_dict)
+
+                # writer write loss per validation iteration
+                self.writer.add_scalars(
+                    "Val_Label", {"loss": np.array(LabelLoss).mean()}, val_iters,
+                )
+                self.writer.add_scalars(
+                    "Val_Accuracy", {"label": self.mcAcc.get_score()}, val_iters,
+                )
+
+                val_iters += 1
+
+            # writer write loss per epoch
+            self.writer.add_scalars(
+                "epoch_loss", {"label_val": np.array(LabelLoss).mean(),}, epoch,
+            )
+
+            """ save best model """
+            if self.mcAcc.get_score() > best_acc:
+                print("Best model saved!")
+                self.save(os.path.join(self.save_dir, "model_best.pth.tar"))
+                best_acc = self.mcAcc.get_score()
+
+        return val_iters, best_acc
+
+    def save(self, path):
         torch.save(
-            self.model.state_dict(),
-            os.path.join(self.save_dir, "model_{}.pth.tar".format(epoch)),
+            self.model.state_dict(), path,
         )
 
 
