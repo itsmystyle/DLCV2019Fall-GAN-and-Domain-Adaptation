@@ -11,6 +11,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
 
+from module.metrics import BCAccuracy
 from module.dcgan.generator import Generator
 from module.dcgan.discriminator import Discriminator
 from module.utils import weights_init, set_random_seed
@@ -19,15 +20,23 @@ from module.dataset.celebA import CelebADataset
 
 class Trainer:
     def __init__(
-        self, epochs, dataset, writer, save_dir, lr=2e-4, beta1=0.5, workers=4, batch_size=128,
+        self,
+        epochs,
+        dataset,
+        writer,
+        save_dir,
+        lr=2e-4,
+        beta1=0.5,
+        workers=4,
+        batch_size=128,
     ):
 
         self.epochs = epochs
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.latent_dim = 100
+        self.latent_dim = 128
 
         # Models
-        self.generator = Generator()
+        self.generator = Generator(latent_dim=self.latent_dim)
         self.discriminator = Discriminator()
         self.generator.to(self.device)
         self.discriminator.to(self.device)
@@ -37,8 +46,12 @@ class Trainer:
         print(self.discriminator)
 
         # Optimizer
-        self.OptimG = optim.Adam(self.generator.parameters(), lr=lr, betas=(beta1, 0.999))
-        self.OptimD = optim.Adam(self.discriminator.parameters(), lr=lr, betas=(beta1, 0.999))
+        self.OptimG = optim.Adam(
+            self.generator.parameters(), lr=lr, betas=(beta1, 0.999)
+        )
+        self.OptimD = optim.Adam(
+            self.discriminator.parameters(), lr=lr, betas=(beta1, 0.999)
+        )
 
         # Criterion
         self.criterion = nn.BCELoss()
@@ -55,6 +68,11 @@ class Trainer:
         self.fixed_noise = torch.randn(64, self.latent_dim, 1, 1, device=self.device)
         self.real_label = 1
         self.fake_label = 0
+
+        # Adversarial
+        self.d_advAcc_fake = BCAccuracy()
+        self.d_advAcc_real = BCAccuracy()
+        self.g_advAcc = BCAccuracy()
 
     def fit(self):
         # train model
@@ -76,11 +94,17 @@ class Trainer:
         self.discriminator.train()
 
         trange = tqdm(
-            enumerate(self.dataloader), total=len(self.dataloader), desc="Epoch {}".format(epoch),
+            enumerate(self.dataloader),
+            total=len(self.dataloader),
+            desc="Epoch {}".format(epoch),
         )
 
         Loss_G = []
         Loss_D = []
+
+        self.d_advAcc_fake.reset()
+        self.d_advAcc_real.reset()
+        self.g_advAcc.reset()
 
         for idx, (images, _) in trange:
             bs = images.shape[0]
@@ -93,7 +117,11 @@ class Trainer:
             output = self.discriminator(real_image)
             errD_real = self.criterion(output.view(-1), label)
             errD_real.backward()
-            D_x = output.mean().item()
+
+            self.d_advAcc_real.update(
+                output.view(-1).detach().cpu().numpy(),
+                label.view(-1).detach().cpu().numpy(),
+            )
 
             # Train D with fake image
             noise = torch.randn(bs, self.latent_dim, 1, 1, device=self.device)
@@ -103,7 +131,10 @@ class Trainer:
             errD_fake = self.criterion(output.view(-1), label)
             errD_fake.backward()
 
-            D_G_z1 = output.mean().item()
+            self.d_advAcc_fake.update(
+                output.view(-1).detach().cpu().numpy(),
+                label.view(-1).detach().cpu().numpy(),
+            )
 
             errD = errD_real + errD_fake
 
@@ -118,7 +149,10 @@ class Trainer:
             errG = self.criterion(output.view(-1), label)
             errG.backward()
 
-            D_G_z2 = output.mean().item()
+            self.g_advAcc.update(
+                output.view(-1).detach().cpu().numpy(),
+                label.view(-1).detach().cpu().numpy(),
+            )
 
             self.OptimG.step()
             ###############################
@@ -129,29 +163,42 @@ class Trainer:
 
             # update tqdm
             postfix_dict = {
-                "L_G": "{:.4f}".format(np.array(Loss_G).mean()),
-                "L_D": "{:.4f}".format(np.array(Loss_D).mean()),
-                "cL_G": "{:.4f}".format(errG.item()),
-                "cL_D": "{:.4f}".format(errD.item()),
-                "D(x)": "{:.4f}".format(D_x),
-                "D(G(z))": "{:.4f}/{:.4f}".format(D_G_z1, D_G_z2),
+                "LGD": "{:.4f}/{:.4f}".format(
+                    np.array(Loss_G).mean(), np.array(Loss_D).mean()
+                ),
+                "cL_GD": "{:.4f}/{:.4f}".format(errG.item(), errD.item()),
+                "AdvGRF": "{:.4f}/{:.4f}/{:.4f}".format(
+                    self.g_advAcc.get_score(),
+                    self.d_advAcc_real.get_score(),
+                    self.d_advAcc_fake.get_score(),
+                ),
             }
             trange.set_postfix(**postfix_dict)
 
             # writer write loss of g and d per iteration
             self.writer.add_scalars(
-                "avg_loss", {"G": np.array(Loss_G).mean(), "D": np.array(Loss_D).mean()}, iters
+                "avg_loss",
+                {"G": np.array(Loss_G).mean(), "D": np.array(Loss_D).mean()},
+                iters,
             )
             self.writer.add_scalars("loss", {"G": errG.item(), "D": errD.item()}, iters)
             self.writer.add_scalars(
-                "distribution", {"D(x)": D_x, "D(G(z))_d": D_G_z1, "D(G(z))_g": D_G_z2}, iters
+                "adv_accuracy",
+                {
+                    "D_real": self.d_advAcc_real.get_score(),
+                    "D_fake": self.d_advAcc_fake.get_score(),
+                    "G": self.g_advAcc.get_score(),
+                },
+                iters,
             )
 
             iters += 1
 
         # writer write loss of g and d per epoch
         self.writer.add_scalars(
-            "epoch_loss", {"G": np.array(Loss_G).mean(), "D": np.array(Loss_D).mean()}, epoch
+            "epoch_loss",
+            {"G": np.array(Loss_G).mean(), "D": np.array(Loss_D).mean()},
+            epoch,
         )
 
         return iters
@@ -167,7 +214,9 @@ class Trainer:
         plt.axis("off")
         plt.title("Fixed Noise Images")
         plt.imshow(
-            np.transpose(vutils.make_grid(fake, padding=2, normalize=True).cpu(), (1, 2, 0),),
+            np.transpose(
+                vutils.make_grid(fake, padding=2, normalize=True).cpu(), (1, 2, 0),
+            ),
         )
         dir = os.path.join(self.save_dir, "figures")
         if not os.path.exists(dir):
@@ -193,8 +242,12 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=5, help="Training epochs.")
     parser.add_argument("model_dir", type=str, help="Directory path to store models.")
     parser.add_argument("attribute_path", type=str, help="Path to load attributes csv.")
+    parser.add_argument(
+        "--attributes", nargs="+", default=None, help="Attributes use as condition."
+    )
     parser.add_argument("images_dir", type=str, help="Path to images stored directory.")
     parser.add_argument("--random_seed", type=int, default=42, help="random seed.")
+    parser.add_argument("--batch_size", type=int, default=32, help="batch size.")
 
     args = parser.parse_args()
 
@@ -203,7 +256,14 @@ if __name__ == "__main__":
     writer = SummaryWriter(os.path.join(args.model_dir, "train_logs"))
 
     trainer = Trainer(
-        args.epochs, dataset, writer, args.model_dir, lr=2e-4, beta1=0.5, workers=4, batch_size=128,
+        args.epochs,
+        dataset,
+        writer,
+        args.model_dir,
+        lr=2e-4,
+        beta1=0.5,
+        workers=8,
+        batch_size=args.batch_size,
     )
 
     trainer.fit()
