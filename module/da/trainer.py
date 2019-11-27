@@ -12,7 +12,7 @@ from tensorboardX import SummaryWriter
 from module.da.dann import DANN
 from module.utils import weights_init, set_random_seed
 from module.dataset.digit import DigitDataset
-from module.metrics import MulticlassAccuracy
+from module.metrics import MulticlassAccuracy, BCAccuracy
 
 
 class Trainer:
@@ -25,7 +25,7 @@ class Trainer:
         train_source_only,
         writer,
         save_dir,
-        lr=2e-4,
+        lr=1e-3,
         workers=8,
         batch_size=128,
     ):
@@ -35,7 +35,7 @@ class Trainer:
         self.train_source_only = train_source_only
 
         # Models
-        self.model = DANN()
+        self.model = DANN(p=0.5)
         self.model.to(self.device)
         self.model.apply(weights_init)
         print(self.model)
@@ -45,6 +45,7 @@ class Trainer:
 
         # Criterion
         self.criterion = nn.NLLLoss()
+        self.domain_criterion = nn.BCELoss()
 
         # Dataloader
         self.batch_size = batch_size
@@ -64,6 +65,8 @@ class Trainer:
         self.source_label = 0
         self.target_label = 1
         self.mcAcc = MulticlassAccuracy()
+        self.targetAcc = BCAccuracy()
+        self.sourceAcc = BCAccuracy()
 
     def fit(self):
         # train model
@@ -71,12 +74,20 @@ class Trainer:
         iters = 0
         val_iters = 0
         best_acc = 0
+        low_valid_loss = 100000.0
 
         for epoch in range(1, self.epochs + 1):
             iters = self._run_one_epoch(epoch, iters)
 
             # generate figures
-            val_iters, best_acc = self._eval_one_epoch(epoch, val_iters, best_acc)
+            val_iters, best_acc, low_valid_loss = self._eval_one_epoch(
+                epoch, val_iters, best_acc, low_valid_loss
+            )
+
+            # save model
+            # self.save(os.path.join(self.save_dir, "model_{}.pth.tar".format(epoch)))
+
+        print("Best model Acc:{}, Loss:{}".format(best_acc, low_valid_loss))
 
     def _run_one_epoch(self, epoch, iters):
         # train model one epoch
@@ -95,22 +106,24 @@ class Trainer:
         DomainLoss = []
         LabelLoss = []
         self.mcAcc.reset()
+        self.targetAcc.reset()
+        self.sourceAcc.reset()
 
         for idx, (sources, targets) in trange:
 
             # prepare training data
             source_images, labels = sources
             target_images, _ = targets
-            bs = source_images.shape[0]
+            bs_source = source_images.shape[0]
+            bs_target = target_images.shape[0]
             source_images = source_images.to(self.device)
             labels = labels.to(self.device)
             target_images = target_images.to(self.device)
-            source_labels = torch.full((bs,), self.source_label, device=self.device)
-            target_labels = torch.full((bs,), self.target_label, device=self.device)
+            source_labels = torch.full((bs_source,), self.source_label, device=self.device)
+            target_labels = torch.full((bs_target,), self.target_label, device=self.device)
 
-            Lambda = (
-                2.0 / (1.0 + np.exp(-10 * float(idx + start_steps) / total_steps)) - 1
-            )
+            p = (idx + start_steps) / total_steps
+            Lambda = 2.0 / (1.0 + np.exp(-10 * p)) - 1
 
             self.optim.zero_grad()
 
@@ -124,11 +137,21 @@ class Trainer:
 
             if not self.train_source_only:
                 # calculate source domain loss
-                source_domain_loss = self.criterion(domain_pred, source_labels)
+                source_domain_loss = self.domain_criterion(domain_pred.view(-1), source_labels)
+
+                self.sourceAcc.update(
+                    domain_pred.view(-1).detach().cpu().numpy(),
+                    source_labels.view(-1).cpu().numpy(),
+                )
 
                 # calculate target domain loss
                 _, domain_pred = self.model(target_images, Lambda)
-                target_domain_loss = self.criterion(domain_pred, target_labels)
+                target_domain_loss = self.domain_criterion(domain_pred.view(-1), target_labels)
+
+                self.targetAcc.update(
+                    domain_pred.view(-1).detach().cpu().numpy(),
+                    target_labels.view(-1).cpu().numpy(),
+                )
 
                 domain_loss = source_domain_loss + target_domain_loss
                 loss += domain_loss
@@ -140,11 +163,14 @@ class Trainer:
 
             # update tqdm
             postfix_dict = {
-                "Label loss": "{:.5f}".format(np.mean(LabelLoss)),
-                "Domain loss": "{:.5f}".format(
-                    np.mean(DomainLoss) if DomainLoss != [] else 0.0
+                "L/D": "{:.5f}/{:.5f}".format(
+                    np.mean(LabelLoss), np.mean(DomainLoss) if DomainLoss != [] else 0.0
                 ),
-                "Label Acc.": "{:.5f}".format(self.mcAcc.get_score()),
+                "MCAcc.": "{:.5f}".format(self.mcAcc.get_score()),
+                "S/T": "{:.5f}/{:.5f}".format(
+                    self.sourceAcc.get_score(), self.targetAcc.get_score()
+                ),
+                "Lmbd": "{:.5f}".format(Lambda),
             }
             trange.set_postfix(**postfix_dict)
 
@@ -153,9 +179,7 @@ class Trainer:
                 "Label", {"loss": np.array(LabelLoss).mean()}, iters,
             )
             self.writer.add_scalars(
-                "Domain",
-                {"loss": np.array(DomainLoss).mean() if DomainLoss != [] else 0.0},
-                iters,
+                "Domain", {"loss": np.array(DomainLoss).mean() if DomainLoss != [] else 0.0}, iters,
             )
             self.writer.add_scalars(
                 "Accuracy", {"label": self.mcAcc.get_score()}, iters,
@@ -175,7 +199,7 @@ class Trainer:
 
         return iters
 
-    def _eval_one_epoch(self, epoch, val_iters, best_acc):
+    def _eval_one_epoch(self, epoch, val_iters, best_acc, low_valid_loss):
         # evaluate model one epoch
         self.model.eval()
 
@@ -183,9 +207,7 @@ class Trainer:
         self.mcAcc.reset()
 
         trange = tqdm(
-            enumerate(self.valid_dataloader),
-            total=len(self.valid_dataloader),
-            desc="Valid",
+            enumerate(self.valid_dataloader), total=len(self.valid_dataloader), desc="Valid",
         )
 
         with torch.no_grad():
@@ -217,16 +239,22 @@ class Trainer:
 
             # writer write loss per epoch
             self.writer.add_scalars(
-                "epoch_loss", {"label_val": np.array(LabelLoss).mean(),}, epoch,
+                "epoch_loss", {"label_val": np.array(LabelLoss).mean()}, epoch,
             )
 
-            """ save best model """
+            # save best acc model
             if self.mcAcc.get_score() > best_acc:
                 print("Best model saved!")
                 self.save(os.path.join(self.save_dir, "model_best.pth.tar"))
                 best_acc = self.mcAcc.get_score()
 
-        return val_iters, best_acc
+            # save lowest valid loss model
+            if np.array(LabelLoss).mean() < low_valid_loss:
+                print("Lowest valid loss model saved!")
+                self.save(os.path.join(self.save_dir, "model_lowest.pth.tar"))
+                low_valid_loss = np.array(LabelLoss).mean()
+
+        return val_iters, best_acc, low_valid_loss
 
     def save(self, path):
         torch.save(
@@ -236,22 +264,16 @@ class Trainer:
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(description="DCGan trainer.")
+    parser = argparse.ArgumentParser(description="Domain Adaptation trainer.")
 
     parser.add_argument("--epochs", type=int, default=5, help="Training epochs.")
     parser.add_argument("model_dir", type=str, help="Directory path to store models.")
     parser.add_argument("source_datapath", type=str, help="Path to source dataset.")
-    parser.add_argument(
-        "source_images_dir", type=str, help="Path to source images directory."
-    )
+    parser.add_argument("source_images_dir", type=str, help="Path to source images directory.")
     parser.add_argument("valid_datapath", type=str, help="Path to validation dataset.")
-    parser.add_argument(
-        "valid_images_dir", type=str, help="Path to validation images directory."
-    )
+    parser.add_argument("valid_images_dir", type=str, help="Path to validation images directory.")
     parser.add_argument("--target_datapath", type=str, help="Path to target dataset.")
-    parser.add_argument(
-        "--target_images_dir", type=str, help="Path to target images directory."
-    )
+    parser.add_argument("--target_images_dir", type=str, help="Path to target images directory.")
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size.")
     parser.add_argument("--random_seed", type=int, default=42, help="random seed.")
 
@@ -277,7 +299,7 @@ if __name__ == "__main__":
         train_source_only,
         writer,
         args.model_dir,
-        lr=1e-4,
+        lr=1e-3,
         workers=8,
         batch_size=args.batch_size,
     )
