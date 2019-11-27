@@ -38,8 +38,8 @@ class DANN(nn.Module):
             nn.Linear(50 * 4 * 4, 100),
             nn.BatchNorm1d(100),
             nn.ReLU(True),
-            nn.Linear(100, 2),
-            nn.LogSoftmax(dim=1),
+            nn.Linear(100, 1),
+            nn.Sigmoid(),
         )
 
     def forward(self, X, Lambda):
@@ -54,3 +54,9 @@ class DANN(nn.Module):
         domain_output = self.domain_classifier(reverse_features)
 
         return label_output, domain_output
+
+    def extract_feature(self, X):
+        features = self.feature_extractor(X)
+        features = features.view(-1, 50 * 4 * 4)
+
+        return features
