@@ -135,3 +135,28 @@ If you have any problems related to HW3, you may
 CUDA_VISIBLE_DEVICES=0 python module/generate_image.py --output_dir models/generated_imgs/ --dcgan_model models/dcgan/generator_537.pth.tar --acgan_model models/acgan/generator_603.pth.tar --random_seed 42 821
 
 #### Domain Adaptation
+##### Baseline
+source only - mnistm
+CUDA_VISIBLE_DEVICES=3 python module/da/trainer.py models/dann_baseline_m/ /tmp2/itsmystyle/hw3_data/digits/mnistm/train.csv /tmp2/itsmystyle/hw3_data/digits/mnistm/train /tmp2/itsmystyle/hw3_data/digits/mnistm/test.csv /tmp2/itsmystyle/hw3_data/digits/mnistm/test --batch_size 64 --epochs 100
+
+source only - svhn
+CUDA_VISIBLE_DEVICES=3 python module/da/trainer.py models/dann_baseline_s/ /tmp2/itsmystyle/hw3_data/digits/svhn/train.csv /tmp2/itsmystyle/hw3_data/digits/svhn/train /tmp2/itsmystyle/hw3_data/digits/svhn/test.csv /tmp2/itsmystyle/hw3_data/digits/svhn/test --batch_size 64 --epochs 100
+
+dann - mnistm
+CUDA_VISIBLE_DEVICES=3 python module/da/trainer.py models/dann_m2s/ /tmp2/itsmystyle/hw3_data/digits/mnistm/train.csv /tmp2/itsmystyle/hw3_data/digits/mnistm/train /tmp2/itsmystyle/hw3_data/digits/mnistm/test.csv /tmp2/itsmystyle/hw3_data/digits/mnistm/test --target_images_dir /tmp2/itsmystyle/hw3_data/digits/svhn/train --target_datapath /tmp2/itsmystyle/hw3_data/digits/svhn/train.csv --batch_size 64 --epochs 100
+
+dann - svhn
+CUDA_VISIBLE_DEVICES=3 python module/da/trainer.py models/dann_s2m/ /tmp2/itsmystyle/hw3_data/digits/svhn/train.csv /tmp2/itsmystyle/hw3_data/digits/svhn/train /tmp2/itsmystyle/hw3_data/digits/svhn/test.csv /tmp2/itsmystyle/hw3_data/digits/svhn/test --target_images_dir /tmp2/itsmystyle/hw3_data/digits/mnistm/train --target_datapath /tmp2/itsmystyle/hw3_data/digits/mnistm/train.csv --batch_size 64 --epochs 100
+
+##### Improved
+source only - mnistm
+CUDA_VISIBLE_DEVICES=2 python module/dsn/trainer.py models/dsn_baseline_m/ /tmp2/itsmystyle/hw3_data/digits/mnistm/train.csv /tmp2/itsmystyle/hw3_data/digits/mnistm/train /tmp2/itsmystyle/hw3_data/digits/mnistm/test.csv /tmp2/itsmystyle/hw3_data/digits/mnistm/test --batch_size 64 --epochs 100
+
+source only - svhn
+CUDA_VISIBLE_DEVICES=3 python module/dsn/trainer.py models/dsn_baseline_s/ /tmp2/itsmystyle/hw3_data/digits/svhn/train.csv /tmp2/itsmystyle/hw3_data/digits/svhn/train /tmp2/itsmystyle/hw3_data/digits/svhn/test.csv /tmp2/itsmystyle/hw3_data/digits/svhn/test --batch_size 64 --epochs 100
+
+dsn - mnistm
+CUDA_VISIBLE_DEVICES=3 python module/dsn/trainer.py models/dsn_m2s/ /tmp2/itsmystyle/hw3_data/digits/mnistm/train.csv /tmp2/itsmystyle/hw3_data/digits/mnistm/train /tmp2/itsmystyle/hw3_data/digits/mnistm/test.csv /tmp2/itsmystyle/hw3_data/digits/mnistm/test --target_images_dir /tmp2/itsmystyle/hw3_data/digits/svhn/train --target_datapath /tmp2/itsmystyle/hw3_data/digits/svhn/train.csv --batch_size 64 --epochs 100
+
+dsn - svhn
+CUDA_VISIBLE_DEVICES=3 python module/dsn/trainer.py models/dsn_s2m/ /tmp2/itsmystyle/hw3_data/digits/svhn/train.csv /tmp2/itsmystyle/hw3_data/digits/svhn/train /tmp2/itsmystyle/hw3_data/digits/svhn/test.csv /tmp2/itsmystyle/hw3_data/digits/svhn/test --target_images_dir /tmp2/itsmystyle/hw3_data/digits/mnistm/train --target_datapath /tmp2/itsmystyle/hw3_data/digits/mnistm/train.csv --batch_size 64 --epochs 100
