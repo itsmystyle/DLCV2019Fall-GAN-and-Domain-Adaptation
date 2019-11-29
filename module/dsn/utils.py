@@ -8,7 +8,7 @@ class Flatten(nn.Module):
 
 
 def MSELoss(input, target):
-    errors = input - target
+    errors = input - target.float()
 
     return torch.sum(errors.pow(2)) / torch.numel(errors)
 
