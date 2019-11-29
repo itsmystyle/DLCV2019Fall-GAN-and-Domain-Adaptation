@@ -2,13 +2,12 @@ import os
 import argparse
 
 import torch
-import numpy as np
-import matplotlib.pyplot as plt
 import torchvision.utils as vutils
 
 from module.utils import set_random_seed
 from module.dcgan.generator import Generator as DCGen
 from module.acgan.generator import Generator as ACGen
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate GAN and ACGAN images.")
@@ -64,15 +63,7 @@ if __name__ == "__main__":
     with torch.no_grad():
         fake = dcgen(dc_noise).detach().cpu()
 
-    plt.figure(figsize=(8, 8))
-    plt.axis("off")
-    plt.imshow(
-        np.transpose(
-            vutils.make_grid(fake, nrow=8, padding=2, normalize=True).cpu(), (1, 2, 0),
-        ),
-    )
-    plt.savefig(fig_1_path)
-    plt.close()
+    vutils.save_image(fake, fig_1_path, nrow=8, padding=2, normalize=True)
 
     # Generate AC Gan images
     acgen.eval()
@@ -80,15 +71,6 @@ if __name__ == "__main__":
     with torch.no_grad():
         fake = acgen(ac_noise, ac_attribute).detach().cpu()
 
-    plt.figure(figsize=(8, 8))
-    plt.axis("off")
-    plt.imshow(
-        np.transpose(
-            vutils.make_grid(
-                fake, nrow=4, padding=2, normalize=True, scale_each=True
-            ).cpu(),
-            (1, 2, 0),
-        ),
+    vutils.save_image(
+        fake, fig_2_path, nrow=4, padding=2, normalize=True, scale_each=True
     )
-    plt.savefig(fig_2_path)
-    plt.close()
