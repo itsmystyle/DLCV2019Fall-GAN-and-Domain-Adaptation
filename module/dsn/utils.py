@@ -8,15 +8,15 @@ class Flatten(nn.Module):
 
 
 def MSELoss(input, target):
-    diffs = input - target
+    errors = input - target
 
-    return torch.sum(diffs.pow(2)) / torch.numel(diffs)
+    return torch.sum(errors.pow(2)) / torch.numel(errors)
 
 
 def SI_MSELoss(input, target):
-    diffs = input - target
+    errors = input - target
 
-    return torch.sum(diffs).pow(2) / (torch.numel(diffs) ** 2)
+    return torch.sum(errors).pow(2) / (torch.numel(errors) ** 2)
 
 
 def DiffLoss(shared_input, private_input):
