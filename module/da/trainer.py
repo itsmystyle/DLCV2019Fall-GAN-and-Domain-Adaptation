@@ -41,7 +41,7 @@ class Trainer:
         print(self.model)
 
         # Optimizer
-        self.optim = optim.Adam(self.model.parameters(), lr=lr)
+        self.optim = optim.Adam(self.model.parameters(), lr=lr, weight_decay=2e-5)
 
         # Criterion
         self.criterion = nn.NLLLoss()
