@@ -19,17 +19,17 @@ def SI_MSELoss(input, target):
     return torch.sum(diffs).pow(2) / (torch.numel(diffs) ** 2)
 
 
-def DiffLoss(input1, input2):
-    bs = input1.shape[0]
-    input1 = input1.view(bs, -1)
-    input2 = input2.view(bs, -1)
+def DiffLoss(shared_input, private_input):
+    bs = shared_input.shape[0]
+    shared_input = shared_input.view(bs, -1)
+    private_input = private_input.view(bs, -1)
 
-    input1_l2_norm = torch.norm(input1, p=2, dim=1, keepdim=True).detach()
-    input1_l2 = input1.div(input1_l2_norm.expand_as(input1) + 1e-20)
+    shared_l2_norm = torch.norm(shared_input, p=2, dim=1, keepdim=True).detach()
+    shared_l2 = shared_input.div(shared_l2_norm.expand_as(shared_input) + 1e-20)
 
-    input2_l2_norm = torch.norm(input2, p=2, dim=1, keepdim=True).detach()
-    input2_l2 = input2.div(input2_l2_norm.expand_as(input2) + 1e-20)
+    private_l2_norm = torch.norm(private_input, p=2, dim=1, keepdim=True).detach()
+    private_l2 = private_input.div(private_l2_norm.expand_as(private_input) + 1e-20)
 
-    loss = torch.mean((input1_l2.t().mm(input2_l2)).pow(2))
+    loss = torch.mean((shared_l2.t().mm(private_l2)).pow(2))
 
     return loss
