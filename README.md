@@ -130,3 +130,8 @@ If you have any problems related to HW3, you may
 - Contact TAs by e-mail ([ntudlcvta2019@gmail.com](mailto:ntudlcvta2019@gmail.com))
 - Post your question in the comment section of [this post]()
 
+### Developer Guide
+#### GAN
+CUDA_VISIBLE_DEVICES=0 python module/generate_image.py --output_dir models/generated_imgs/ --dcgan_model models/dcgan/generator_537.pth.tar --acgan_model models/acgan/generator_603.pth.tar --random_seed 42 821
+
+#### Domain Adaptation
