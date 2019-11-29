@@ -14,10 +14,10 @@ def set_random_seed(seed):
     # torch.backends.cudnn.benchmark = False
 
 
-def weights_init(m, mode="xavier"):
+def weights_init(m, mode="normal"):
     classname = m.__class__.__name__
 
-    if mode == "normal":
+    if mode == "xavier":
         if classname.find("Conv") != -1:
             nn.init.xavier_uniform_(m.weight)
         elif classname.find("BatchNorm") != -1:
