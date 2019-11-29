@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
 
 from module.da.dann import DANN
-from module.utils import weights_init, set_random_seed
+from module.utils import xavier_weights_init, set_random_seed
 from module.dataset.digit import DigitDataset
 from module.metrics import MulticlassAccuracy, BCAccuracy
 
@@ -37,7 +37,7 @@ class Trainer:
         # Models
         self.model = DANN(p=0.5)
         self.model.to(self.device)
-        self.model.apply(weights_init)
+        self.model.apply(xavier_weights_init)
         print(self.model)
 
         # Optimizer
@@ -119,8 +119,12 @@ class Trainer:
             source_images = source_images.to(self.device)
             labels = labels.to(self.device)
             target_images = target_images.to(self.device)
-            source_labels = torch.full((bs_source,), self.source_label, device=self.device)
-            target_labels = torch.full((bs_target,), self.target_label, device=self.device)
+            source_labels = torch.full(
+                (bs_source,), self.source_label, device=self.device
+            )
+            target_labels = torch.full(
+                (bs_target,), self.target_label, device=self.device
+            )
 
             p = (idx + start_steps) / total_steps
             Lambda = 2.0 / (1.0 + np.exp(-10 * p)) - 1
@@ -137,7 +141,9 @@ class Trainer:
 
             if not self.train_source_only:
                 # calculate source domain loss
-                source_domain_loss = self.domain_criterion(domain_pred.view(-1), source_labels)
+                source_domain_loss = self.domain_criterion(
+                    domain_pred.view(-1), source_labels
+                )
 
                 self.sourceAcc.update(
                     domain_pred.view(-1).detach().cpu().numpy(),
@@ -146,7 +152,9 @@ class Trainer:
 
                 # calculate target domain loss
                 _, domain_pred = self.model(target_images, Lambda)
-                target_domain_loss = self.domain_criterion(domain_pred.view(-1), target_labels)
+                target_domain_loss = self.domain_criterion(
+                    domain_pred.view(-1), target_labels
+                )
 
                 self.targetAcc.update(
                     domain_pred.view(-1).detach().cpu().numpy(),
@@ -179,7 +187,9 @@ class Trainer:
                 "Label", {"loss": np.array(LabelLoss).mean()}, iters,
             )
             self.writer.add_scalars(
-                "Domain", {"loss": np.array(DomainLoss).mean() if DomainLoss != [] else 0.0}, iters,
+                "Domain",
+                {"loss": np.array(DomainLoss).mean() if DomainLoss != [] else 0.0},
+                iters,
             )
             self.writer.add_scalars(
                 "Accuracy", {"label": self.mcAcc.get_score()}, iters,
@@ -207,7 +217,9 @@ class Trainer:
         self.mcAcc.reset()
 
         trange = tqdm(
-            enumerate(self.valid_dataloader), total=len(self.valid_dataloader), desc="Valid",
+            enumerate(self.valid_dataloader),
+            total=len(self.valid_dataloader),
+            desc="Valid",
         )
 
         with torch.no_grad():
@@ -269,11 +281,17 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=5, help="Training epochs.")
     parser.add_argument("model_dir", type=str, help="Directory path to store models.")
     parser.add_argument("source_datapath", type=str, help="Path to source dataset.")
-    parser.add_argument("source_images_dir", type=str, help="Path to source images directory.")
+    parser.add_argument(
+        "source_images_dir", type=str, help="Path to source images directory."
+    )
     parser.add_argument("valid_datapath", type=str, help="Path to validation dataset.")
-    parser.add_argument("valid_images_dir", type=str, help="Path to validation images directory.")
+    parser.add_argument(
+        "valid_images_dir", type=str, help="Path to validation images directory."
+    )
     parser.add_argument("--target_datapath", type=str, help="Path to target dataset.")
-    parser.add_argument("--target_images_dir", type=str, help="Path to target images directory.")
+    parser.add_argument(
+        "--target_images_dir", type=str, help="Path to target images directory."
+    )
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size.")
     parser.add_argument("--random_seed", type=int, default=42, help="random seed.")
 
