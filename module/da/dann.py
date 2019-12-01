@@ -1,5 +1,5 @@
 import torch.nn as nn
-import torch.nn.functional as F
+import torchvision.models as models
 
 from module.da.utils import GradientReversalLayer
 from module.dsn.utils import Flatten
@@ -13,18 +13,12 @@ class DANN(nn.Module):
         self.latent_dim = 512
         self.p = p
 
+        backbone = models.resnet18(pretrained=True)
         self.feature_extractor = nn.Sequential(
-            nn.Conv2d(3, self.n_features, 5),
-            nn.BatchNorm2d(self.n_features),
-            nn.MaxPool2d(2),
-            nn.ReLU(True),
-            nn.Conv2d(self.n_features, self.n_features * 2, 5),
-            nn.BatchNorm2d(self.n_features * 2),
-            nn.MaxPool2d(2),
-            nn.ReLU(True),
-            nn.Dropout2d(self.p),
+            *(list(backbone.children())[:-3]),
             Flatten(),
-            nn.Linear(self.n_features * 2 * 4 * 4, self.latent_dim),
+            nn.Linear(1024, self.latent_dim),
+            nn.ReLU(True),
         )
 
         self.label_predictor = nn.Sequential(
@@ -49,7 +43,6 @@ class DANN(nn.Module):
 
     def forward(self, X, Lambda):
         features = self.feature_extractor(X)
-        features = F.relu(features)
 
         # label classification
         label_output = self.label_predictor(features)
