@@ -1,0 +1,1 @@
+python3 module/da/predict.py $1 $2 $3
