@@ -1,0 +1,1 @@
+python3 module/generate_image.py --output_dir $1 --dcgan_model models/dcgan/generator_537.pth.tar --acgan_model models/acgan/generator_603.pth.tar --random_seed 42 821
