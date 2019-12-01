@@ -7,12 +7,6 @@ class Flatten(nn.Module):
         return input.view(input.shape[0], -1)
 
 
-def MSELoss(input, target):
-    errors = input - target.float()
-
-    return torch.sum(errors.pow(2)) / torch.numel(errors)
-
-
 def SI_MSELoss(input, target):
     errors = input - target
 
