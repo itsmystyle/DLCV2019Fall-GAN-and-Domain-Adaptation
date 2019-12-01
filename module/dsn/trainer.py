@@ -35,24 +35,23 @@ class Trainer:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.train_source_only = train_source_only
 
+        # Parameters
+        self.alpha = 0.15
+        self.beta = 0.075
+        self.gamma = 0.25
+
         # Models
         self.model = DSN()
         self.model.to(self.device)
         self.model.apply(xavier_weights_init)
         print(self.model)
 
-        # Parameters
-        self.alpha = 0.15
-        self.beta = 0.075
-        self.gamma = 0.25
-
         # Optimizer
-        self.optim = optim.Adam(self.model.parameters(), lr=lr)
+        self.optim = optim.Adam(self.model.parameters(), lr=lr, weight_decay=1e-5)
 
         # Criterion
         self.task_criterion = nn.NLLLoss()
         self.domain_criterion = nn.BCELoss()
-        # self.domain_criterion = MSELoss()
         self.recon_criterion = SI_MSELoss
         self.different_criterion = DiffLoss
 
