@@ -1,4 +1,5 @@
 hw3_data
 __pycache__
+*.tar
 *.pyc
 *.ipynb_checkpoints
