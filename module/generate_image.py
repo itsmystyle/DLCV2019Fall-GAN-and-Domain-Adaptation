@@ -4,16 +4,14 @@ import argparse
 import torch
 import torchvision.utils as vutils
 
-from module.utils import set_random_seed
+from utils import set_random_seed
 from module.dcgan.generator import Generator as DCGen
 from module.acgan.generator import Generator as ACGen
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate GAN and ACGAN images.")
-    parser.add_argument(
-        "--output_dir", type=str, help="Directory to store generated images."
-    )
+    parser.add_argument("--output_dir", type=str, help="Directory to store generated images.")
     parser.add_argument("--dcgan_model", type=str, help="Path to DCGan model.")
     parser.add_argument("--acgan_model", type=str, help="Path to ACGan model.")
     parser.add_argument("--random_seed", nargs="+", default=None, help="random seed.")
@@ -45,9 +43,7 @@ if __name__ == "__main__":
     set_random_seed(int(args.random_seed[1]))
     tmp_noise = torch.randn(28, 120, 1, 1, device=device)
     ac_noise = torch.cat((tmp_noise[4:-8], tmp_noise[-4:]))
-    ac_attribute = torch.randint(
-        low=0, high=2, size=(20, 1), dtype=torch.long, device=device,
-    )
+    ac_attribute = torch.randint(low=0, high=2, size=(20, 1), dtype=torch.long, device=device,)
     ac_attribute[0, -1] = 0
     for i in range(1, 20):
         if i % 2 != 0:
@@ -71,6 +67,4 @@ if __name__ == "__main__":
     with torch.no_grad():
         fake = acgen(ac_noise, ac_attribute).detach().cpu()
 
-    vutils.save_image(
-        fake, fig_2_path, nrow=4, padding=2, normalize=True, scale_each=True
-    )
+    vutils.save_image(fake, fig_2_path, nrow=4, padding=2, normalize=True, scale_each=True)
