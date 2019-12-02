@@ -2,4 +2,5 @@ hw3_data
 __pycache__
 *.pyc
 models
+*.zip
 *.ipynb_checkpoints
