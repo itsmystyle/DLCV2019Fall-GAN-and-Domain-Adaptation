@@ -4,7 +4,7 @@ import argparse
 import torch
 import torchvision.utils as vutils
 
-from utils import set_random_seed
+from module.utils import set_random_seed
 from module.dcgan.generator import Generator as DCGen
 from module.acgan.generator import Generator as ACGen
 
