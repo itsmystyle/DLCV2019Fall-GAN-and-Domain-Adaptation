@@ -2,5 +2,4 @@ hw3_data
 __pycache__
 *.pyc
 models
-*.ipynb
 *.ipynb_checkpoints
