@@ -43,7 +43,7 @@ if __name__ == "__main__":
     set_random_seed(int(args.random_seed[1]))
     tmp_noise = torch.randn(28, 120, 1, 1, device=device)
     ac_noise = torch.cat((tmp_noise[4:-8], tmp_noise[-4:]))
-    ac_attribute = torch.randint(low=0, high=2, size=(20, 1), dtype=torch.long, device=device,)
+    ac_attribute = torch.randint(low=0, high=2, size=(20, 1), dtype=torch.long, device=device)
     ac_attribute[0, -1] = 0
     for i in range(1, 20):
         if i % 2 != 0:
