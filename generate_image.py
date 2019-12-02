@@ -1,4 +1,5 @@
 import os
+import pickle
 import argparse
 
 import torch
@@ -11,7 +12,9 @@ from module.acgan.generator import Generator as ACGen
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate GAN and ACGAN images.")
-    parser.add_argument("--output_dir", type=str, help="Directory to store generated images.")
+    parser.add_argument(
+        "--output_dir", type=str, help="Directory to store generated images."
+    )
     parser.add_argument("--dcgan_model", type=str, help="Path to DCGan model.")
     parser.add_argument("--acgan_model", type=str, help="Path to ACGan model.")
     parser.add_argument("--random_seed", nargs="+", default=None, help="random seed.")
@@ -33,17 +36,37 @@ if __name__ == "__main__":
 
     # prepare dc noise
     set_random_seed(int(args.random_seed[0]))
-    dc_noise = torch.randn(64, 128, 1, 1, device=device)
-    dc_noise[1], dc_noise[2], dc_noise[5] = dc_noise[42], dc_noise[50], dc_noise[54]
-    dc_noise[9], dc_noise[18], dc_noise[28] = dc_noise[60], dc_noise[32], dc_noise[34]
-    dc_noise[27] = dc_noise[63]
-    dc_noise = dc_noise[:32]
+    # dc_noise = torch.randn(64, 128, 1, 1, device=device)
+    # dc_noise[1], dc_noise[2], dc_noise[5] = dc_noise[42], dc_noise[50], dc_noise[54]
+    # dc_noise[9], dc_noise[18], dc_noise[28] = dc_noise[60], dc_noise[32], dc_noise[34]
+    # dc_noise[27] = dc_noise[63]
+    # dc_noise = dc_noise[:32]
+
+    # tmp_dc_noise = dc_noise.detach().cpu().numpy()
+    # with open("models/dcgan/fixed_noise.pkl", "wb") as fout:
+    #     pickle.dump(tmp_dc_noise, fout)
+
+    with open(os.path.join("models", "dcgan", "fixed_noise.pkl"), "rb") as fin:
+        dc_noise = pickle.load(fin)
+    dc_noise = torch.tensor(dc_noise).float()
+    dc_noise = dc_noise.to(device)
 
     # prepare ac noise
     set_random_seed(int(args.random_seed[1]))
-    tmp_noise = torch.randn(28, 120, 1, 1, device=device)
-    ac_noise = torch.cat((tmp_noise[4:-8], tmp_noise[-4:]))
-    ac_attribute = torch.randint(low=0, high=2, size=(20, 1), dtype=torch.long, device=device)
+    # tmp_noise = torch.randn(28, 120, 1, 1, device=device)
+    # ac_noise = torch.cat((tmp_noise[4:-8], tmp_noise[-4:]))
+
+    # tmp_ac_noise = ac_noise.detach().cpu().numpy()
+    # with open("models/acgan/fixed_noise.pkl", "wb") as fout:
+    #     pickle.dump(tmp_ac_noise, fout)
+
+    with open(os.path.join("models", "acgan", "fixed_noise.pkl"), "rb") as fin:
+        ac_noise = pickle.load(fin)
+    ac_noise = torch.tensor(ac_noise).float()
+    ac_noise = ac_noise.to(device)
+    ac_attribute = torch.randint(
+        low=0, high=2, size=(20, 1), dtype=torch.long, device=device
+    )
     ac_attribute[0, -1] = 0
     for i in range(1, 20):
         if i % 2 != 0:
@@ -67,4 +90,6 @@ if __name__ == "__main__":
     with torch.no_grad():
         fake = acgen(ac_noise, ac_attribute).detach().cpu()
 
-    vutils.save_image(fake, fig_2_path, nrow=4, padding=2, normalize=True, scale_each=True)
+    vutils.save_image(
+        fake, fig_2_path, nrow=4, padding=2, normalize=True, scale_each=True
+    )
