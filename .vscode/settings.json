@@ -7,5 +7,4 @@
     "python.linting.flake8Args": [
         "--max-line-length=100"
     ],
-    "python.pythonPath": "/home/itsmystyle/.pyenv/versions/dlp36/bin/python"
 }
